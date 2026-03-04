@@ -67,7 +67,7 @@ export default async function handler(req, res) {
 - student: 채팅방 상대방 한국어 이름 그대로. 절대 번역하지 말 것.
 - school: 학교명 한국어 그대로. 없으면 빈 문자열. 절대 영어로 번역하지 말 것.
 - grade: 학년. 없으면 빈 문자열.
-- qna: 학생 메시지를 q, 선생님 메시지를 a로. 여러 개면 배열로.
+- qna: 카카오톡에서 오른쪽 노란색/초록색 말풍선 = 선생님(나)가 보낸 메시지 = a. 왼쪽 흰색/회색 말풍선 = 학생이 보낸 메시지 = q. 절대 반대로 혼동하지 말 것. 여러 개면 배열로.
 - tags: 교재확인/시간표/수업조율/시험범위/수행평가/자료요청/수업질문/기타 중 해당하는 것만 선택.`;
 
   try {
@@ -88,7 +88,7 @@ export default async function handler(req, res) {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
+        model: 'claude-sonnet-4-5',
         max_tokens: 1024,
         messages: [{
           role: 'user',
