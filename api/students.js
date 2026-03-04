@@ -54,7 +54,7 @@ export default async function handler(req, res) {
     if (req.method === 'POST') {
       const body = req.body;
       const incoming = Array.isArray(body) ? body : [body];
-      let added = 0, skipped = 0;
+      let added = 0, updated = 0;
       for (const s of incoming) {
         if (!s.name) continue;
         const existing = students.find(x => x.name === s.name && x.school === s.school);
@@ -65,22 +65,22 @@ export default async function handler(req, res) {
             name: s.name,
             school: s.school || '',
             admissionYear: s.admissionYear ? Number(s.admissionYear) : null,
-            publisher: s.publisher || '',
-            textbook: s.textbook || '',
-            subTextbook: s.subTextbook || ''
+            textbook: s.textbook || '',       // 교과서 (출판사코드 or 교재명)
+            supplementary: s.supplementary || '', // 부교재
+            mockExam: s.mockExam || ''        // 모의고사 (추후)
           });
           added++;
         } else {
-          // 기존 학생 정보 업데이트 (교재 등 추가 가능)
-          if (s.publisher) existing.publisher = s.publisher;
-          if (s.textbook) existing.textbook = s.textbook;
-          if (s.subTextbook) existing.subTextbook = s.subTextbook;
+          // 기존 학생 정보 업데이트
           if (s.admissionYear) existing.admissionYear = Number(s.admissionYear);
-          skipped++;
+          if (s.textbook) existing.textbook = s.textbook;
+          if (s.supplementary) existing.supplementary = s.supplementary;
+          if (s.mockExam) existing.mockExam = s.mockExam;
+          updated++;
         }
       }
       await kvSet('students', students);
-      return res.status(200).json({ success: true, added, skipped });
+      return res.status(200).json({ success: true, added, updated });
     }
 
     if (req.method === 'PUT') {
