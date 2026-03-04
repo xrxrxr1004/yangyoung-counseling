@@ -5,7 +5,12 @@ async function kvGet(key) {
     headers: { Authorization: `Bearer ${token}` }
   });
   const data = await r.json();
-  return data.result ? JSON.parse(data.result) : null;
+  if (!data.result) return null;
+  try {
+    return typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
+  } catch {
+    return data.result;
+  }
 }
 
 export default async function handler(req, res) {
