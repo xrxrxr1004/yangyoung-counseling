@@ -61,9 +61,11 @@ export default async function handler(req, res) {
   try {
     // 1. Cloudinary 이미지 업로드 (먼저)
     let imgUrl = null;
+    let cloudinaryError = null;
     try {
       imgUrl = await uploadToCloudinary(imageBase64, mediaType || 'image/png');
     } catch (e) {
+      cloudinaryError = e.message;
       console.error('Cloudinary 실패:', e.message);
     }
 
@@ -102,7 +104,7 @@ export default async function handler(req, res) {
     parsed.id = 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
     parsed.imgs = imgUrl ? [imgUrl] : [];
 
-    return res.status(200).json({ success: true, data: parsed, cloudinaryUrl: imgUrl });
+    return res.status(200).json({ success: true, data: parsed, cloudinaryUrl: imgUrl, cloudinaryError });
 
   } catch (e) {
     return res.status(500).json({ error: e.message });
