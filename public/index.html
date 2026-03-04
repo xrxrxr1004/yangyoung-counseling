@@ -39,6 +39,11 @@ body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:#f0
 .sb-item{padding:10px 12px;border-bottom:1px solid #f5f7fa;cursor:pointer;display:flex;align-items:center;gap:9px;transition:background .1s;border-left:3px solid transparent;}
 .sb-item:hover{background:#f8f9fc;}
 .sb-item.active{background:#eff6ff;border-left-color:#2563eb;}
+.sb-item.checked{background:#fef3c7;border-left-color:#f59e0b;}
+.sb-item .cb{width:16px;height:16px;cursor:pointer;flex-shrink:0;accent-color:#2563eb;}
+#selBar{display:none;padding:8px 12px;background:#fef3c7;border-bottom:1px solid #fde68a;font-size:13px;align-items:center;justify-content:space-between;}
+#selBar.show{display:flex;}
+.btn-del-sel{background:#dc2626;color:#fff;border:none;padding:5px 12px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600;}
 .av{width:33px;height:33px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0;}
 .sb-nm{font-size:13px;font-weight:600;}
 .sb-sc{font-size:11px;color:#9ca3af;margin-top:1px;}
@@ -152,6 +157,10 @@ body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:#f0
   <div class="sidebar">
     <div class="sb-top">
       <input class="sb-search" id="searchIn" placeholder="이름·학교·내용 검색..." oninput="renderList()">
+      <div id="selBar">
+        <span id="selCount">0건 선택됨</span>
+        <button class="btn-del-sel" onclick="deleteSelected()">🗑️ 선택 삭제</button>
+      </div>
     </div>
     <div class="filter-row" id="filterRow"></div>
     <div class="sb-list" id="sbList"></div>
@@ -218,7 +227,7 @@ const SEED = [{"id": "r001", "date": "2026-03-02", "student": "김예지", "scho
 const COLORS = ["#1d4ed8","#7c3aed","#dc2626","#ea580c","#16a34a","#0891b2","#db2777","#65a30d","#b45309","#475569","#be185d","#0369a1"];
 const TAGS = ["시간표","수업조율","교재확인","시험범위","수행평가","자료요청","수업질문","기타"];
 
-let records = [], activeId = null, filter = null, pendingDel = null, editingId = null;
+let records = [], activeId = null, filter = null, pendingDel = null, editingId = null, selectedIds = new Set();
 let modalTags = [], currentImgB64 = null;
 let isSynced = false;
 
@@ -293,6 +302,37 @@ function renderFilters() {
 function setFilter(t) { filter=t; renderFilters(); renderList(); }
 
 // ── LIST ──
+function toggleSelect(id) {
+  if (selectedIds.has(id)) selectedIds.delete(id);
+  else selectedIds.add(id);
+  const bar = document.getElementById("selBar");
+  const cnt = document.getElementById("selCount");
+  if (selectedIds.size > 0) { bar.classList.add("show"); cnt.textContent = selectedIds.size + "건 선택됨"; }
+  else bar.classList.remove("show");
+  renderList();
+}
+
+async function deleteSelected() {
+  if (!selectedIds.size) return;
+  if (!confirm(`선택한 ${selectedIds.size}건을 모두 삭제할까요?`)) return;
+  let ok = 0;
+  for (const id of [...selectedIds]) {
+    try {
+      await api("record", "DELETE", { id });
+      records = records.filter(r => r.id !== id);
+      ok++;
+    } catch(e) { console.error(e); }
+  }
+  selectedIds.clear();
+  document.getElementById("selBar").classList.remove("show");
+  if (activeId && !records.find(r=>r.id===activeId)) {
+    activeId = null;
+    document.getElementById("detail").innerHTML = `<div class="empty"><div class="empty-icon">💬</div><p>왼쪽에서 학생을 선택하세요</p></div>`;
+  }
+  renderFilters(); renderList();
+  toast(ok + "건 삭제됐습니다.");
+}
+
 function renderList() {
   const q = document.getElementById("searchIn").value.toLowerCase();
   const filtered = records.filter(r => {
@@ -314,7 +354,9 @@ function renderList() {
     groups[date].forEach(r => {
       const sc = [r.school,r.grade].filter(Boolean).join(" ") || "학교 미확인";
       const tags = (r.tags||[]).map(t=>`<span class="sb-t">${t}</span>`).join("");
-      h += `<div class="sb-item ${r.id===activeId?"active":""}" onclick="select('${r.id}')">
+      const isChecked = selectedIds.has(r.id);
+      h += `<div class="sb-item ${r.id===activeId?"active":""} ${isChecked?"checked":""}" onclick="select('${r.id}')">
+        <input type="checkbox" class="cb" ${isChecked?"checked":""} onclick="event.stopPropagation();toggleSelect('${r.id}')" />
         <div class="av" style="background:${avColor(r.student)}">${r.student[0]}</div>
         <div>
           <div class="sb-nm">${r.student}</div>
