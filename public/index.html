@@ -156,6 +156,22 @@ body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:#f0
 .cal-cnt{background:#2563eb;color:#fff;border-radius:8px;font-size:8px;font-weight:700;padding:0 4px;line-height:14px;}
 .cal-today{font-weight:700;color:#2563eb;}
 .cal-empty{color:#d1d5db;}
+
+/* 학생 관리 모달 */
+.std-modal{background:#fff;border-radius:16px;width:680px;max-width:95vw;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);}
+.std-tabs{display:flex;border-bottom:1px solid #e4e8f0;padding:0 20px;}
+.std-tab{padding:12px 16px;font-size:13px;font-weight:600;cursor:pointer;color:#9ca3af;border-bottom:2.5px solid transparent;background:none;border-top:none;border-left:none;border-right:none;font-family:inherit;}
+.std-tab.on{color:#2563eb;border-bottom-color:#2563eb;}
+.std-body{padding:18px 20px;}
+.std-table{width:100%;border-collapse:collapse;font-size:13px;}
+.std-table th{background:#f8f9fc;padding:8px 10px;text-align:left;font-size:11px;font-weight:700;color:#6b7280;border-bottom:1px solid #e4e8f0;}
+.std-table td{padding:9px 10px;border-bottom:1px solid #f1f5f9;color:#374151;}
+.std-table tr:hover td{background:#f8f9fc;}
+.grade-badge{background:#dbeafe;color:#1e40af;border-radius:6px;padding:1px 8px;font-size:11.5px;font-weight:700;}
+.grade-old{background:#f1f5f9;color:#9ca3af;}
+.drop-zone{border:2px dashed #d1d5db;border-radius:10px;padding:32px;text-align:center;color:#9ca3af;font-size:13px;cursor:pointer;transition:all .15s;}
+.drop-zone:hover,.drop-zone.over{border-color:#2563eb;background:#eff6ff;color:#2563eb;}
+.csv-preview{margin-top:14px;max-height:220px;overflow-y:auto;border:1px solid #e4e8f0;border-radius:8px;}
 </style>
 </head>
 <body>
@@ -165,6 +181,7 @@ body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:#f0
   <div class="spacer"></div>
   <div class="sync-indicator"><div class="sync-dot" id="syncDot"></div><span id="syncText">연결됨</span></div>
   <div class="stat" id="statEl" style="margin-left:8px"></div>
+  <button class="btn btn-ghost" onclick="openStudentMgr()">👥 학생 관리</button>
   <button class="btn btn-ghost" onclick="openManual(null)">✏️ 직접 입력</button>
   <input type="file" id="fileIn" accept="image/*" multiple style="display:none;" onchange="handleFiles(this.files)">
 </div>
@@ -226,6 +243,21 @@ body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:#f0
   </div>
 </div>
 
+<!-- 학생 관리 모달 -->
+<div class="modal-bg" id="stdBg" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:100;align-items:center;justify-content:center;backdrop-filter:blur(3px);">
+  <div class="std-modal">
+    <div class="modal-head">
+      <div class="modal-title">👥 학생 관리</div>
+      <button class="modal-close" onclick="closeStudentMgr()">✕</button>
+    </div>
+    <div class="std-tabs">
+      <button class="std-tab on" id="stdTab1" onclick="switchStdTab(1)">학생 목록</button>
+      <button class="std-tab" id="stdTab2" onclick="switchStdTab(2)">CSV 등록</button>
+    </div>
+    <div class="std-body" id="stdBody"></div>
+  </div>
+</div>
+
 <div class="confirm-bg" id="confirmBg">
   <div class="confirm-box">
     <h3>🗑️ 기록 삭제</h3>
@@ -250,6 +282,7 @@ const TAGS = ["시간표","수업조율","교재확인","시험범위","수행�
 
 let records = [], activeId = null, filter = null, pendingDel = null, editingId = null, selectedIds = new Set();
 let calYear, calMonth, dateFilter = null;
+let students = [], stdTab = 1, csvPreview = [];
 let modalTags = [], currentImgB64 = null, currentParsed = null;
 let isSynced = false;
 
@@ -562,8 +595,9 @@ async function handleFiles(files) {
       try {
         const b64 = await toB64(file);
         const res = await api("parse", "POST", { imageBase64: b64, mediaType: file.type || "image/png" });
-        const rec = Array.isArray(res.data) ? res.data[0] : res.data;
+        let rec = Array.isArray(res.data) ? res.data[0] : res.data;
         if (!rec || !rec.student) throw new Error('분석 결과 없음');
+        rec = enrichWithStudent(rec);
         // 같은 날짜 + 같은 학생이면 기존 기록에 병합
         const existing = records.find(r => r.student === rec.student && r.date === rec.date);
         if (existing) {
@@ -728,8 +762,181 @@ async function doDelete() {
 // ── LIGHTBOX ──
 function showLb(src) { document.getElementById("lbImg").src=src; document.getElementById("lb").classList.add("show"); }
 
+
+// ── STUDENTS ──
+async function loadStudents() {
+  try {
+    const res = await api('students', 'GET');
+    students = res.data || [];
+  } catch(e) { students = []; }
+}
+
+function calcGradeClient(admissionYear) {
+  if (!admissionYear) return null;
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  const schoolYear = month >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  const grade = schoolYear - admissionYear + 1;
+  return (grade >= 1 && grade <= 3) ? grade : null;
+}
+
+function openStudentMgr() {
+  document.getElementById('stdBg').style.display = 'flex';
+  switchStdTab(1);
+}
+function closeStudentMgr() {
+  document.getElementById('stdBg').style.display = 'none';
+}
+function switchStdTab(n) {
+  stdTab = n;
+  document.getElementById('stdTab1').className = 'std-tab' + (n===1?' on':'');
+  document.getElementById('stdTab2').className = 'std-tab' + (n===2?' on':'');
+  renderStdBody();
+}
+
+function renderStdBody() {
+  const el = document.getElementById('stdBody');
+  if (stdTab === 1) {
+    if (!students.length) {
+      el.innerHTML = '<div style="text-align:center;padding:30px;color:#9ca3af;font-size:13px;">등록된 학생이 없습니다.<br>CSV 등록 탭에서 추가해주세요.</div>';
+      return;
+    }
+    const sorted = [...students].sort((a,b) => a.name.localeCompare(b.name));
+    let h = `<div style="margin-bottom:10px;font-size:12px;color:#6b7280;">총 ${students.length}명 · 학년은 매년 3월 자동 갱신</div>
+    <table class="std-table">
+      <thead><tr><th>이름</th><th>학교</th><th>학년</th><th>출판사</th><th>교재</th><th>부교재</th><th></th></tr></thead><tbody>`;
+    sorted.forEach(s => {
+      const grade = calcGradeClient(s.admissionYear);
+      const gradeBadge = grade
+        ? `<span class="grade-badge">${grade}학년</span>`
+        : `<span class="grade-badge grade-old">${s.admissionYear ? '졸업/미정' : '-'}</span>`;
+      h += `<tr>
+        <td><strong>${s.name}</strong></td>
+        <td>${s.school||'-'}</td>
+        <td>${gradeBadge}</td>
+        <td style="font-size:11.5px;">${s.publisher||'-'}</td>
+        <td style="font-size:11px;color:#6b7280;max-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${s.textbook||''}">${s.textbook||'-'}</td>
+        <td style="font-size:11px;color:#9ca3af;max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${s.subTextbook||''}">${s.subTextbook||'-'}</td>
+        <td><button onclick="deleteStudent('${s.id}')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:12px;">삭제</button></td>
+      </tr>`;
+    });
+    h += '</tbody></table>';
+    el.innerHTML = h;
+  } else {
+    el.innerHTML = `
+      <div style="margin-bottom:12px;font-size:12px;color:#6b7280;">
+        CSV 형식: <code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;">학생,학교,학년,출판사,교재,부교재</code><br>
+        <span style="color:#9ca3af;">• 학년(1~3)을 넣으면 입학연도 자동 계산</span><br>
+        <span style="color:#9ca3af;">• 헤더 행 있어도 자동 제거</span><br>
+        <span style="color:#9ca3af;">• 이미 있는 학생은 교재 정보만 업데이트</span>
+      </div>
+      <div class="drop-zone" id="csvDrop"
+        ondragover="event.preventDefault();this.classList.add('over')"
+        ondragleave="this.classList.remove('over')"
+        ondrop="event.preventDefault();this.classList.remove('over');handleCsvDrop(event.dataTransfer.files)">
+        📂 CSV 파일을 여기에 드래그하거나<br>
+        <label style="color:#2563eb;cursor:pointer;font-weight:600;">클릭해서 선택
+          <input type="file" accept=".csv,.txt" style="display:none" onchange="handleCsvDrop(this.files)">
+        </label>
+      </div>
+      <div id="csvPreviewArea"></div>`;
+  }
+}
+
+function handleCsvDrop(files) {
+  if (!files.length) return;
+  const file = files[0];
+  const reader = new FileReader();
+  reader.onload = e => {
+    const text = e.target.result;
+    parseCsv(text);
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+function parseCsv(text) {
+  const lines = text.trim().split(/\r?\n/).filter(l => l.trim());
+  csvPreview = [];
+  const GRADE_TO_ADMISSION = {1:2026, 2:2025, 3:2024}; // 2026학년도 기준
+  for (const line of lines) {
+    const cols = line.split(',').map(c => c.trim().replace(/^"+|"+$/g,''));
+    if (cols.length < 1 || !cols[0]) continue;
+    // 헤더 행 건너뜀
+    if (['name','이름','학생'].includes(cols[0].toLowerCase())) continue;
+    const grade = parseInt(cols[2]);
+    const admissionYear = !isNaN(grade) && grade >= 1 && grade <= 3
+      ? GRADE_TO_ADMISSION[grade]
+      : (cols[2] && cols[2].length === 4 ? Number(cols[2]) : null); // 직접 연도 입력도 지원
+    csvPreview.push({
+      name: cols[0],
+      school: cols[1]||'',
+      admissionYear,
+      publisher: cols[3]||'',
+      textbook: cols[4]||'',
+      subTextbook: cols[5]||''
+    });
+  }
+  renderCsvPreview();
+}
+
+function renderCsvPreview() {
+  const el = document.getElementById('csvPreviewArea');
+  if (!csvPreview.length) { el.innerHTML = '<div style="margin-top:10px;color:#ef4444;font-size:12px;">파싱된 데이터가 없습니다.</div>'; return; }
+  let h = `<div style="margin-top:14px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <span style="font-size:12px;color:#374151;font-weight:600;">${csvPreview.length}명 미리보기</span>
+      <button onclick="uploadCsv()" style="background:#2563eb;color:#fff;border:none;border-radius:7px;padding:6px 14px;font-size:12.5px;font-weight:700;cursor:pointer;">✅ 등록하기</button>
+    </div>
+    <div class="csv-preview">
+    <table class="std-table">
+      <thead><tr><th>이름</th><th>학교</th><th>학년</th><th>출판사</th><th>교재</th></tr></thead><tbody>`;
+  csvPreview.forEach(s => {
+    const grade = calcGradeClient(s.admissionYear);
+    h += `<tr><td>${s.name}</td><td>${s.school||'-'}</td><td>${grade ? grade+'학년' : '-'}</td><td>${s.publisher||'-'}</td><td>${s.textbook||(s.subTextbook?'(부교재만)':'-')}</td></tr>`;
+  });
+  h += '</tbody></table></div></div>';
+  el.innerHTML = h;
+}
+
+async function uploadCsv() {
+  if (!csvPreview.length) return;
+  try {
+    const res = await api('students', 'POST', csvPreview);
+    await loadStudents();
+    toast(`✅ ${res.added}명 등록${res.skipped ? ` (${res.skipped}명 업데이트)` : ''} 완료`);
+    csvPreview = [];
+    switchStdTab(1);
+  } catch(e) { toast('등록 실패: ' + e.message, 'err'); }
+}
+
+async function deleteStudent(id) {
+  if (!confirm('이 학생을 삭제할까요?')) return;
+  try {
+    await api('students', 'DELETE', { id });
+    await loadStudents();
+    renderStdBody();
+    toast('삭제됐습니다.');
+  } catch(e) { toast('삭제 실패: ' + e.message, 'err'); }
+}
+
+// 상담 기록 저장 시 학생 DB에서 정보 자동 매칭
+function enrichWithStudent(rec) {
+  const s = students.find(s => s.name === rec.student);
+  if (s) {
+    if (!rec.school && s.school) rec.school = s.school;
+    if (!rec.grade && s.admissionYear) {
+      const grade = calcGradeClient(s.admissionYear);
+      if (grade) rec.grade = grade + '학년';
+    }
+    if (s.publisher) rec.publisher = s.publisher;
+    if (s.textbook) rec.textbook = s.textbook;
+    if (s.subTextbook) rec.subTextbook = s.subTextbook;
+  }
+  return rec;
+}
+
 // ── KEYBOARD ──
-document.addEventListener("keydown", e=>{ if(e.key==="Escape"){ document.getElementById("lb").classList.remove("show"); closeModal(); closeConfirm(); } });
+document.addEventListener("keydown", e=>{ if(e.key==="Escape"){ document.getElementById("lb").classList.remove("show"); closeModal(); closeConfirm(); closeStudentMgr(); } });
 document.getElementById("modalBg").addEventListener("click", e=>{ if(e.target===document.getElementById("modalBg")) closeModal(); });
 
 // ── POLLING: auto-refresh every 30s ──
@@ -744,6 +951,7 @@ setInterval(async ()=>{
 
 // ── INIT ──
 loadRecords();
+loadStudents();
 </script>
 </body>
 </html>
