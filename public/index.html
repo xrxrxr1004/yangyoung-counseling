@@ -418,7 +418,8 @@ async function handleFiles(files) {
       document.getElementById("overlayStep").textContent = "Claude AI 분석 중...";
       const res = await api("parse", "POST", { imageBase64: b64, mediaType: file.type || "image/png" });
       document.getElementById("overlay").classList.remove("show");
-      openModal(res.data, b64);
+      const parsed = Array.isArray(res.data) ? res.data[0] : res.data;
+      openModal(parsed, b64);
     } catch(e) {
       document.getElementById("overlay").classList.remove("show");
       toast("분석 실패: " + e.message, "err");
@@ -433,8 +434,8 @@ async function handleFiles(files) {
       try {
         const b64 = await toB64(file);
         const res = await api("parse", "POST", { imageBase64: b64, mediaType: file.type || "image/png" });
-        // 이미지는 Upstash 용량 초과로 저장 제외, 텍스트만 저장
-        const rec = { ...res.data }; // imgs는 parse.js에서 Cloudinary URL로 채워짐
+        const rec = Array.isArray(res.data) ? res.data[0] : res.data;
+        if (!rec || !rec.student) throw new Error('분석 결과 없음');
         await api("record", "POST", rec);
         records.unshift(rec);
         ok++;
