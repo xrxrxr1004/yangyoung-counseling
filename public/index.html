@@ -248,7 +248,6 @@ async function loadRecords() {
     records = res.data;
     if (!records.length) {
       // SEED 전체를 한 번에 저장
-      await api("seed", "POST", {});
       records = [...SEED];
     }
     isSynced = true;
