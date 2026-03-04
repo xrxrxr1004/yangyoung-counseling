@@ -247,7 +247,6 @@ async function loadRecords() {
     const res = await api("records");
     records = res.data;
     if (!records.length) {
-      // SEED 전체를 한 번에 저장
       records = [...SEED];
     }
     isSynced = true;
@@ -255,7 +254,6 @@ async function loadRecords() {
     renderFilters();
     renderList();
   } catch(e) {
-    // Fallback to local seed if server unreachable
     records = [...SEED];
     setSyncState("error");
     renderFilters();
