@@ -132,6 +132,10 @@ export default async function handler(req, res) {
     try { parsed = JSON.parse(jsonMatch[0]); }
     catch { return res.status(500).json({ error: 'JSON 파싱 실패', raw: text }); }
 
+    // 배열로 왔을 경우 첫 번째 항목만 사용
+    if (Array.isArray(parsed)) parsed = parsed[0];
+    if (!parsed) return res.status(500).json({ error: '분석 결과 없음' });
+
     parsed.id = 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
     parsed.imgs = imgUrl ? [imgUrl] : [];
 
