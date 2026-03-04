@@ -228,7 +228,7 @@ const COLORS = ["#1d4ed8","#7c3aed","#dc2626","#ea580c","#16a34a","#0891b2","#db
 const TAGS = ["시간표","수업조율","교재확인","시험범위","수행평가","자료요청","수업질문","기타"];
 
 let records = [], activeId = null, filter = null, pendingDel = null, editingId = null, selectedIds = new Set();
-let modalTags = [], currentImgB64 = null;
+let modalTags = [], currentImgB64 = null, currentParsed = null;
 let isSynced = false;
 
 // ── SYNC STATE ──
@@ -434,7 +434,7 @@ async function handleFiles(files) {
         const b64 = await toB64(file);
         const res = await api("parse", "POST", { imageBase64: b64, mediaType: file.type || "image/png" });
         // 이미지는 Upstash 용량 초과로 저장 제외, 텍스트만 저장
-        const rec = { ...res.data, imgs: [] };
+        const rec = { ...res.data }; // imgs는 parse.js에서 Cloudinary URL로 채워짐
         await api("record", "POST", rec);
         records.unshift(rec);
         ok++;
@@ -464,7 +464,7 @@ function openManual(record) {
 }
 function openEdit(id) { openManual(records.find(r=>r.id===id)); }
 function openModal(parsed, imgB64) {
-  editingId = null; currentImgB64 = imgB64; modalTags = [...(parsed.tags||[])];
+  editingId = null; currentImgB64 = imgB64; currentParsed = parsed; modalTags = [...(parsed.tags||[])];
   document.getElementById("modalTitle").innerHTML = `🤖 AI 파싱 결과 <span class="modal-badge">확인 후 저장</span>`;
   renderModalBody(parsed, imgB64);
   document.getElementById("saveBtn").onclick = saveModal;
@@ -551,7 +551,7 @@ async function saveModal() {
     school: document.getElementById("f_school").value.trim(),
     grade: document.getElementById("f_grade").value.trim(),
     qna: getQna(), tags: [...modalTags],
-    imgs: editingId ? (records.find(r=>r.id===editingId)?.imgs||[]) : []  // 이미지 저장 제외 (Upstash 용량 한도)
+    imgs: editingId ? (records.find(r=>r.id===editingId)?.imgs||[]) : (currentParsed?.imgs||[])
   };
   setSyncState("syncing");
   try {
