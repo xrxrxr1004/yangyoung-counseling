@@ -140,6 +140,22 @@ body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:#f0
 .lb.show{display:flex;}
 .lb-img{max-width:88vw;max-height:88vh;object-fit:contain;border-radius:10px;}
 .detail.drag-over{background:#dbeafe !important;border:3px dashed #2563eb !important;transition:all .15s;}
+.sb-item.drag-selecting{background:#fef3c7 !important;border-left-color:#f59e0b !important;}
+.cal-wrap{padding:10px 12px;border-bottom:1px solid #edf0f7;}
+.cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.cal-title{font-size:13px;font-weight:700;color:#374151;}
+.cal-nav{background:none;border:none;cursor:pointer;font-size:14px;color:#9ca3af;padding:2px 6px;}
+.cal-nav:hover{color:#2563eb;}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;}
+.cal-dow{text-align:center;font-size:9.5px;font-weight:700;color:#9ca3af;padding:2px 0;}
+.cal-day{text-align:center;font-size:10.5px;padding:3px 1px;border-radius:5px;cursor:default;min-height:28px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;}
+.cal-day.has-rec{cursor:pointer;background:#eff6ff;}
+.cal-day.has-rec:hover{background:#dbeafe;}
+.cal-day.active-date{background:#2563eb !important;color:#fff !important;}
+.cal-day.active-date .cal-cnt{background:#fff;color:#2563eb;}
+.cal-cnt{background:#2563eb;color:#fff;border-radius:8px;font-size:8px;font-weight:700;padding:0 4px;line-height:14px;}
+.cal-today{font-weight:700;color:#2563eb;}
+.cal-empty{color:#d1d5db;}
 </style>
 </head>
 <body>
@@ -161,6 +177,10 @@ body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:#f0
         <span id="selCount">0건 선택됨</span>
         <button class="btn-del-sel" onclick="deleteSelected()">🗑️ 선택 삭제</button>
       </div>
+    </div>
+    <div class="cal-wrap" id="calWrap"></div>
+    <div style="padding:4px 12px 6px;border-bottom:1px solid #edf0f7;display:flex;justify-content:flex-end;">
+      <button onclick="deleteAll()" style="background:none;border:none;font-size:11px;color:#ef4444;cursor:pointer;font-family:inherit;font-weight:600;">🗑️ 전체 삭제</button>
     </div>
     <div class="filter-row" id="filterRow"></div>
     <div class="sb-list" id="sbList"></div>
@@ -229,6 +249,7 @@ const COLORS = ["#1d4ed8","#7c3aed","#dc2626","#ea580c","#16a34a","#0891b2","#db
 const TAGS = ["시간표","수업조율","교재확인","시험범위","수행평가","자료요청","수업질문","기타"];
 
 let records = [], activeId = null, filter = null, pendingDel = null, editingId = null, selectedIds = new Set();
+let calYear, calMonth, dateFilter = null;
 let modalTags = [], currentImgB64 = null, currentParsed = null;
 let isSynced = false;
 
@@ -263,11 +284,13 @@ async function loadRecords() {
     setSyncState("ok");
     renderFilters();
     renderList();
+    initCal();
   } catch(e) {
     records = [...SEED];
     setSyncState("error");
     renderFilters();
     renderList();
+    initCal();
     toast("서버 연결 실패 — 로컬 모드로 실행 중", "err");
   }
 }
@@ -301,6 +324,109 @@ function renderFilters() {
   document.getElementById("statEl").innerHTML = `총 <strong>${records.length}</strong>건`;
 }
 function setFilter(t) { filter=t; renderFilters(); renderList(); }
+
+// ── CALENDAR ──
+function initCal() {
+  const now = new Date();
+  calYear = now.getFullYear();
+  calMonth = now.getMonth();
+  renderCal();
+}
+function renderCal() {
+  const DOWS = ['일','월','화','수','목','금','토'];
+  const counts = {};
+  records.forEach(r => { counts[r.date] = (counts[r.date]||0) + 1; });
+
+  const first = new Date(calYear, calMonth, 1);
+  const last = new Date(calYear, calMonth+1, 0);
+  const today = new Date().toISOString().slice(0,10);
+
+  let h = `<div class="cal-header">
+    <button class="cal-nav" onclick="moveCal(-1)">◀</button>
+    <span class="cal-title">${calYear}년 ${calMonth+1}월</span>
+    <button class="cal-nav" onclick="moveCal(1)">▶</button>
+  </div><div class="cal-grid">`;
+
+  DOWS.forEach(d => { h += `<div class="cal-dow">${d}</div>`; });
+
+  for (let i = 0; i < first.getDay(); i++) h += `<div class="cal-day cal-empty"></div>`;
+
+  for (let d = 1; d <= last.getDate(); d++) {
+    const dateStr = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const cnt = counts[dateStr] || 0;
+    const isToday = dateStr === today;
+    const isActive = dateStr === dateFilter;
+    const cls = [
+      'cal-day',
+      cnt > 0 ? 'has-rec' : '',
+      isToday ? 'cal-today' : '',
+      isActive ? 'active-date' : ''
+    ].filter(Boolean).join(' ');
+    const onclick = cnt > 0 ? `onclick="setDateFilter('${dateStr}')"` : '';
+    const badge = cnt > 0 ? `<span class="cal-cnt">${cnt}</span>` : '';
+    h += `<div class="${cls}" ${onclick}><span>${d}</span>${badge}</div>`;
+  }
+  h += '</div>';
+  document.getElementById('calWrap').innerHTML = h;
+}
+function moveCal(dir) {
+  calMonth += dir;
+  if (calMonth < 0) { calMonth = 11; calYear--; }
+  if (calMonth > 11) { calMonth = 0; calYear++; }
+  renderCal();
+}
+function setDateFilter(date) {
+  dateFilter = dateFilter === date ? null : date;
+  renderCal();
+  renderList();
+}
+
+// ── DELETE ALL ──
+async function deleteAll() {
+  if (!records.length) return;
+  if (!confirm(`전체 ${records.length}건을 모두 삭제할까요?\n이 작업은 되돌릴 수 없습니다.`)) return;
+  let ok = 0;
+  for (const r of [...records]) {
+    try { await api('record', 'DELETE', { id: r.id }); ok++; } catch(e) {}
+  }
+  records = []; activeId = null; selectedIds.clear();
+  document.getElementById('selBar').classList.remove('show');
+  document.getElementById('detail').innerHTML = `<div class="empty"><div class="empty-icon">🖼️</div><p style="font-weight:700;font-size:16px;color:#1e40af;">카카오톡 대화 스크린샷을<br>여기에 끌어다 놓으세요</p></div>`;
+  renderFilters(); renderList(); renderCal();
+  toast(ok + '건 삭제됐습니다.');
+}
+
+// ── DRAG SELECT ──
+let isDragging = false, dragStartId = null;
+function startDragSelect(e, id) {
+  if (e.button !== 0) return;
+  isDragging = true; dragStartId = id;
+  selectedIds.clear();
+  selectedIds.add(id);
+  updateSelBar();
+  renderList();
+  e.preventDefault();
+}
+function continueDragSelect(id) {
+  if (!isDragging) return;
+  const items = [...document.querySelectorAll('.sb-item[data-id]')];
+  const ids = items.map(el => el.dataset.id);
+  const si = ids.indexOf(dragStartId), ei = ids.indexOf(id);
+  if (si === -1 || ei === -1) return;
+  const [from, to] = si < ei ? [si, ei] : [ei, si];
+  selectedIds.clear();
+  ids.slice(from, to+1).forEach(i => selectedIds.add(i));
+  updateSelBar();
+  renderList();
+}
+function endDragSelect() { isDragging = false; }
+function updateSelBar() {
+  const bar = document.getElementById('selBar');
+  const cnt = document.getElementById('selCount');
+  if (selectedIds.size > 0) { bar.classList.add('show'); cnt.textContent = selectedIds.size + '건 선택됨'; }
+  else bar.classList.remove('show');
+}
+document.addEventListener('mouseup', endDragSelect);
 
 // ── LIST ──
 function toggleSelect(id) {
@@ -340,7 +466,8 @@ function renderList() {
     const mf = !filter || (r.tags||[]).includes(filter);
     const ms = !q || r.student.includes(q) || (r.school||"").includes(q) ||
       (r.qna||[]).some(qa=>(qa.q+qa.a).toLowerCase().includes(q));
-    return mf && ms;
+    const md = !dateFilter || r.date === dateFilter;
+    return mf && ms && md;
   }).sort((a,b)=>b.date.localeCompare(a.date));
 
   const groups = {};
@@ -356,7 +483,7 @@ function renderList() {
       const sc = [r.school,r.grade].filter(Boolean).join(" ") || "학교 미확인";
       const tags = (r.tags||[]).map(t=>`<span class="sb-t">${t}</span>`).join("");
       const isChecked = selectedIds.has(r.id);
-      h += `<div class="sb-item ${r.id===activeId?"active":""} ${isChecked?"checked":""}" onclick="select('${r.id}')">
+      h += `<div class="sb-item ${r.id===activeId?"active":""} ${isChecked?"checked":""}" data-id="${r.id}" onclick="select('${r.id}')" onmousedown="startDragSelect(event,'${r.id}')" onmouseover="continueDragSelect('${r.id}')">
         <input type="checkbox" class="cb" ${isChecked?"checked":""} onclick="event.stopPropagation();toggleSelect('${r.id}')" />
         <div class="av" style="background:${avColor(r.student)}">${r.student[0]}</div>
         <div>
@@ -594,7 +721,7 @@ async function doDelete() {
     setSyncState("ok");
     closeConfirm(); activeId=null;
     document.getElementById("detail").innerHTML=`<div class="empty"><div class="empty-icon">💬</div><p>기록이 삭제되었습니다</p></div>`;
-    renderFilters(); renderList(); toast("삭제되었습니다.");
+    renderFilters(); renderList(); renderCal(); toast("삭제되었습니다.");
   } catch(e) { setSyncState("error"); toast("삭제 실패: "+e.message,"err"); }
 }
 
