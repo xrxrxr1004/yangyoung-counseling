@@ -246,12 +246,9 @@ async function loadRecords() {
   try {
     const res = await api("records");
     records = res.data;
-    // If KV is empty, seed with initial data
     if (!records.length) {
-      // Seed server with initial records
-      for (const r of SEED) {
-        await api("record", "POST", r);
-      }
+      // SEED 전체를 한 번에 저장
+      await api("seed", "POST", {});
       records = [...SEED];
     }
     isSynced = true;
