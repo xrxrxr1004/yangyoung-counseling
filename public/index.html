@@ -397,6 +397,7 @@ async function handleFiles(files) {
         ok++;
       } catch(e) {
         fail++;
+        toast("실패: " + e.message, "err");
         console.error(file.name, e.message);
       }
     }
