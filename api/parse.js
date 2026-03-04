@@ -1,27 +1,14 @@
 async function uploadToCloudinary(imageBase64, mediaType) {
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-  const apiKey = process.env.CLOUDINARY_API_KEY;
-  const apiSecret = process.env.CLOUDINARY_API_SECRET;
-  if (!cloudName || !apiKey || !apiSecret) throw new Error('Cloudinary 환경변수 없음');
+  if (!cloudName) throw new Error('CLOUDINARY_CLOUD_NAME 없음');
 
-  const timestamp = Math.floor(Date.now() / 1000);
-  const folder = 'yangyoung-counseling';
+  const formData = new FormData();
+  formData.append('file', `data:${mediaType};base64,${imageBase64}`);
+  formData.append('upload_preset', 'yangyoung');
 
-  const { createHash } = await import('crypto');
-  const sigStr = `folder=${folder}&timestamp=${timestamp}${apiSecret}`;
-  const signature = createHash('sha1').update(sigStr).digest('hex');
-
-  // Cloudinary는 data URI 형식으로 base64 직접 수신 가능
   const r = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      file: `data:${mediaType};base64,${imageBase64}`,
-      api_key: apiKey,
-      timestamp,
-      signature,
-      folder
-    })
+    body: formData
   });
 
   const data = await r.json();
