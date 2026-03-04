@@ -20,7 +20,7 @@ export default async function handler(req, res) {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-opus-4-5',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 1000,
         system: `카카오톡 학생 상담 대화 스크린샷을 분석해서 순수 JSON만 반환하세요. 마크다운 없이.
 형식: {"date":"YYYY-MM-DD","student":"이름","school":"학교명(풀네임)","grade":"학년","qna":[{"q":"학생말","a":"선생님말"}],"tags":["태그"]}
