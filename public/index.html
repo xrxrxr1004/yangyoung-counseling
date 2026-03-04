@@ -144,7 +144,7 @@ body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:#f0
   <div class="sync-indicator"><div class="sync-dot" id="syncDot"></div><span id="syncText">연결됨</span></div>
   <div class="stat" id="statEl" style="margin-left:8px"></div>
   <button class="btn btn-ghost" onclick="openManual(null)">✏️ 직접 입력</button>
-  <button class="btn btn-primary" onclick="document.getElementById('fileIn').click()">📷 스크린샷 업로드</button>
+  <label for="fileIn" class="btn btn-primary" style="cursor:pointer">📷 스크린샷 업로드</label>
   <input type="file" id="fileIn" accept="image/*" multiple style="display:none" onchange="handleFiles(this.files)">
 </div>
 
@@ -365,7 +365,10 @@ function select(id) {
 // ── FILE UPLOAD & PARSE ──
 async function handleFiles(files) {
   document.getElementById("fileIn").value = "";
-  for (const file of Array.from(files)) {
+  const fileArr = Array.from(files);
+  if (fileArr.length === 1) {
+    // 1장: 기존대로 모달 확인 후 저장
+    const file = fileArr[0];
     document.getElementById("overlayStep").textContent = `변환 중: ${file.name}`;
     document.getElementById("overlay").classList.add("show");
     try {
@@ -378,6 +381,28 @@ async function handleFiles(files) {
       document.getElementById("overlay").classList.remove("show");
       toast("분석 실패: " + e.message, "err");
     }
+  } else {
+    // 여러 장: 자동 분석 후 바로 저장
+    let ok = 0, fail = 0;
+    for (let i = 0; i < fileArr.length; i++) {
+      const file = fileArr[i];
+      document.getElementById("overlayStep").textContent = `(${i+1}/${fileArr.length}) ${file.name} 분석 중...`;
+      document.getElementById("overlay").classList.add("show");
+      try {
+        const b64 = await toB64(file);
+        const res = await api("parse", "POST", { imageBase64: b64, mediaType: file.type || "image/png" });
+        const rec = { ...res.data, imgs: [`data:image/png;base64,${b64}`] };
+        await api("record", "POST", rec);
+        records.unshift(rec);
+        ok++;
+      } catch(e) {
+        fail++;
+        console.error(file.name, e.message);
+      }
+    }
+    document.getElementById("overlay").classList.remove("show");
+    renderFilters(); renderList();
+    toast(`✅ ${ok}건 저장 완료${fail ? ` (${fail}건 실패)` : ""}`, ok ? "ok" : "err");
   }
 }
 function toB64(file) {
