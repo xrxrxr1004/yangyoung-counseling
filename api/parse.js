@@ -12,18 +12,16 @@ async function uploadToCloudinary(imageBase64, mediaType) {
   const signature = createHash('sha1').update(sigStr).digest('hex');
 
   // Cloudinary는 data URI 형식으로 base64 직접 수신 가능
-  const params = new URLSearchParams({
-    file: `data:${mediaType};base64,${imageBase64}`,
-    api_key: apiKey,
-    timestamp: String(timestamp),
-    signature,
-    folder
-  });
-
   const r = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: params.toString()
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      file: `data:${mediaType};base64,${imageBase64}`,
+      api_key: apiKey,
+      timestamp,
+      signature,
+      folder
+    })
   });
 
   const data = await r.json();
