@@ -149,7 +149,7 @@ body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:#f0
   <div class="sync-indicator"><div class="sync-dot" id="syncDot"></div><span id="syncText">연결됨</span></div>
   <div class="stat" id="statEl" style="margin-left:8px"></div>
   <button class="btn btn-ghost" onclick="openManual(null)">✏️ 직접 입력</button>
-  <label for="fileIn" class="btn btn-primary" style="cursor:pointer">📷 스크린샷 업로드</label>
+  <button class="btn btn-primary" style="cursor:pointer" onclick="document.getElementById('fileIn').click()">📷 스크린샷 업로드</button>
   <input type="file" id="fileIn" accept="image/*" multiple style="display:none" onchange="handleFiles(this.files)">
 </div>
 
