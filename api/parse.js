@@ -2,13 +2,18 @@ async function uploadToCloudinary(imageBase64, mediaType) {
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
   if (!cloudName) throw new Error('CLOUDINARY_CLOUD_NAME 없음');
 
-  const formData = new FormData();
-  formData.append('file', `data:${mediaType};base64,${imageBase64}`);
-  formData.append('upload_preset', 'yangyoung');
+  // Buffer를 Blob으로 변환해서 FormData에 추가
+  const buffer = Buffer.from(imageBase64, 'base64');
+  const ext = mediaType.split('/')[1] || 'png';
+  const blob = new Blob([buffer], { type: mediaType });
+
+  const form = new FormData();
+  form.append('file', blob, `upload.${ext}`);
+  form.append('upload_preset', 'yangyoung');
 
   const r = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
     method: 'POST',
-    body: formData
+    body: form
   });
 
   const data = await r.json();
