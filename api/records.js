@@ -1,4 +1,12 @@
-import { kv } from '@vercel/kv';
+async function kvGet(key) {
+  const url = process.env.KV_REST_API_URL;
+  const token = process.env.KV_REST_API_TOKEN;
+  const r = await fetch(`${url}/get/${key}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  const data = await r.json();
+  return data.result ? JSON.parse(data.result) : null;
+}
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -8,7 +16,7 @@ export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const records = await kv.get('records') || [];
+    const records = await kvGet('records') || [];
     return res.status(200).json({ success: true, data: records });
   } catch (e) {
     return res.status(500).json({ error: e.message });
