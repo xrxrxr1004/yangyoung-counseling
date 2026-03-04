@@ -1,19 +1,50 @@
+function buildMultipart(fields, fileField, fileBuffer, fileName, mimeType) {
+  const boundary = '----Boundary' + Math.random().toString(36).slice(2);
+  const CRLF = '\r\n';
+  const parts = [];
+
+  for (const [name, value] of Object.entries(fields)) {
+    parts.push(
+      `--${boundary}${CRLF}` +
+      `Content-Disposition: form-data; name="${name}"${CRLF}${CRLF}` +
+      `${value}${CRLF}`
+    );
+  }
+
+  const fileHeader =
+    `--${boundary}${CRLF}` +
+    `Content-Disposition: form-data; name="${fileField}"; filename="${fileName}"${CRLF}` +
+    `Content-Type: ${mimeType}${CRLF}${CRLF}`;
+
+  const footer = `${CRLF}--${boundary}--${CRLF}`;
+
+  const headerBuf = Buffer.from(fileHeader, 'utf-8');
+  const footerBuf = Buffer.from(footer, 'utf-8');
+  const textBuf = Buffer.from(parts.join(''), 'utf-8');
+
+  const body = Buffer.concat([textBuf, headerBuf, fileBuffer, footerBuf]);
+  return { body, contentType: `multipart/form-data; boundary=${boundary}` };
+}
+
 async function uploadToCloudinary(imageBase64, mediaType) {
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
   if (!cloudName) throw new Error('CLOUDINARY_CLOUD_NAME 없음');
 
-  // Buffer를 Blob으로 변환해서 FormData에 추가
   const buffer = Buffer.from(imageBase64, 'base64');
-  const ext = mediaType.split('/')[1] || 'png';
-  const blob = new Blob([buffer], { type: mediaType });
+  const ext = (mediaType || 'image/png').split('/')[1] || 'png';
 
-  const form = new FormData();
-  form.append('file', blob, `upload.${ext}`);
-  form.append('upload_preset', 'yangyoung');
+  const { body, contentType } = buildMultipart(
+    { upload_preset: 'yangyoung' },
+    'file',
+    buffer,
+    `upload.${ext}`,
+    mediaType || 'image/png'
+  );
 
   const r = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
     method: 'POST',
-    body: form
+    headers: { 'Content-Type': contentType },
+    body
   });
 
   const data = await r.json();
@@ -59,7 +90,7 @@ export default async function handler(req, res) {
 - tags: 교재확인/시간표/수업조율/시험범위/수행평가/자료요청/수업질문/기타 중 해당하는 것만 선택.`;
 
   try {
-    // 1. Cloudinary 이미지 업로드 (먼저)
+    // 1. Cloudinary 업로드
     let imgUrl = null;
     let cloudinaryError = null;
     try {
@@ -94,9 +125,9 @@ export default async function handler(req, res) {
     if (!aiResponse.ok) return res.status(500).json({ error: aiRes.error?.message || 'Claude API 오류' });
 
     const text = aiRes.content?.[0]?.text || '';
-    // JSON 블록 추출 (앞뒤 텍스트 무시)
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return res.status(500).json({ error: 'JSON 추출 실패', raw: text });
+
     let parsed;
     try { parsed = JSON.parse(jsonMatch[0]); }
     catch { return res.status(500).json({ error: 'JSON 파싱 실패', raw: text }); }
