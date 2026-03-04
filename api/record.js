@@ -11,11 +11,15 @@ async function kvGet(key) {
 
   const data = await r.json();
   if (data.result === null || data.result === undefined) return [];
+
+  let parsed;
   try {
-    return typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
+    parsed = typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
   } catch {
     return [];
   }
+  // 반드시 배열로 반환
+  return Array.isArray(parsed) ? parsed : [];
 }
 
 async function kvSet(key, value) {
@@ -23,15 +27,13 @@ async function kvSet(key, value) {
   const token = process.env.KV_REST_API_TOKEN;
   if (!url || !token) throw new Error('KV 환경변수 없음');
 
-  // Upstash REST API: body를 text/plain으로 전송
-  const serialized = JSON.stringify(value);
   const r = await fetch(`${url}/set/${key}`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'text/plain'
     },
-    body: serialized
+    body: JSON.stringify(value)
   });
   if (!r.ok) {
     const text = await r.text();
@@ -48,7 +50,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
-    let records = await kvGet('records');
+    let records = await kvGet('records'); // 항상 배열
 
     if (req.method === 'POST') {
       const rec = req.body;
