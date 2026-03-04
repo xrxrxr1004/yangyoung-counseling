@@ -804,7 +804,7 @@ function renderStdBody() {
     const sorted = [...students].sort((a,b) => a.name.localeCompare(b.name));
     let h = `<div style="margin-bottom:10px;font-size:12px;color:#6b7280;">총 ${students.length}명 · 학년은 매년 3월 자동 갱신</div>
     <table class="std-table">
-      <thead><tr><th>이름</th><th>학교</th><th>학년</th><th>출판사</th><th>교재</th><th>부교재</th><th></th></tr></thead><tbody>`;
+      <thead><tr><th>이름</th><th>학교</th><th>학년</th><th>교과서</th><th>부교재</th><th></th></tr></thead><tbody>`;
     sorted.forEach(s => {
       const grade = calcGradeClient(s.admissionYear);
       const gradeBadge = grade
@@ -814,9 +814,8 @@ function renderStdBody() {
         <td><strong>${s.name}</strong></td>
         <td>${s.school||'-'}</td>
         <td>${gradeBadge}</td>
-        <td style="font-size:11.5px;">${s.publisher||'-'}</td>
-        <td style="font-size:11px;color:#6b7280;max-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${s.textbook||''}">${s.textbook||'-'}</td>
-        <td style="font-size:11px;color:#9ca3af;max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${s.subTextbook||''}">${s.subTextbook||'-'}</td>
+        <td style="font-size:11.5px;max-width:130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${s.textbook||''}">${s.textbook||'-'}</td>
+        <td style="font-size:11px;color:#9ca3af;max-width:130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${s.supplementary||''}">${s.supplementary||'-'}</td>
         <td><button onclick="deleteStudent('${s.id}')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:12px;">삭제</button></td>
       </tr>`;
     });
@@ -871,9 +870,8 @@ function parseCsv(text) {
       name: cols[0],
       school: cols[1]||'',
       admissionYear,
-      publisher: cols[3]||'',
-      textbook: cols[4]||'',
-      subTextbook: cols[5]||''
+      textbook: cols[3] || cols[4] || '',       // 교과서: 출판사코드 or 교재명
+      supplementary: cols[5] || ''              // 부교재
     });
   }
   renderCsvPreview();
@@ -889,10 +887,10 @@ function renderCsvPreview() {
     </div>
     <div class="csv-preview">
     <table class="std-table">
-      <thead><tr><th>이름</th><th>학교</th><th>학년</th><th>출판사</th><th>교재</th></tr></thead><tbody>`;
+      <thead><tr><th>이름</th><th>학교</th><th>학년</th><th>교과서</th><th>부교재</th></tr></thead><tbody>`;
   csvPreview.forEach(s => {
     const grade = calcGradeClient(s.admissionYear);
-    h += `<tr><td>${s.name}</td><td>${s.school||'-'}</td><td>${grade ? grade+'학년' : '-'}</td><td>${s.publisher||'-'}</td><td>${s.textbook||(s.subTextbook?'(부교재만)':'-')}</td></tr>`;
+    h += `<tr><td>${s.name}</td><td>${s.school||'-'}</td><td>${grade ? grade+'학년' : '-'}</td><td>${s.textbook||'-'}</td><td>${s.supplementary||'-'}</td></tr>`;
   });
   h += '</tbody></table></div></div>';
   el.innerHTML = h;
@@ -903,7 +901,7 @@ async function uploadCsv() {
   try {
     const res = await api('students', 'POST', csvPreview);
     await loadStudents();
-    toast(`✅ ${res.added}명 등록${res.skipped ? ` (${res.skipped}명 업데이트)` : ''} 완료`);
+    toast(`✅ ${res.added}명 등록${res.updated ? ` (${res.updated}명 업데이트)` : ''} 완료`);
     csvPreview = [];
     switchStdTab(1);
   } catch(e) { toast('등록 실패: ' + e.message, 'err'); }
@@ -928,9 +926,8 @@ function enrichWithStudent(rec) {
       const grade = calcGradeClient(s.admissionYear);
       if (grade) rec.grade = grade + '학년';
     }
-    if (s.publisher) rec.publisher = s.publisher;
     if (s.textbook) rec.textbook = s.textbook;
-    if (s.subTextbook) rec.subTextbook = s.subTextbook;
+    if (s.supplementary) rec.supplementary = s.supplementary;
   }
   return rec;
 }
