@@ -139,6 +139,7 @@ body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:#f0
 .lb{display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:400;align-items:center;justify-content:center;}
 .lb.show{display:flex;}
 .lb-img{max-width:88vw;max-height:88vh;object-fit:contain;border-radius:10px;}
+.detail.drag-over{background:#dbeafe !important;border:3px dashed #2563eb !important;transition:all .15s;}
 </style>
 </head>
 <body>
@@ -149,7 +150,7 @@ body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:#f0
   <div class="sync-indicator"><div class="sync-dot" id="syncDot"></div><span id="syncText">연결됨</span></div>
   <div class="stat" id="statEl" style="margin-left:8px"></div>
   <button class="btn btn-ghost" onclick="openManual(null)">✏️ 직접 입력</button>
-  <label class="btn btn-primary" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;">📷 스크린샷 업로드<input type="file" id="fileIn" accept="image/*" multiple style="display:none;" onchange="handleFiles(this.files)"></label>
+  <input type="file" id="fileIn" accept="image/*" multiple style="display:none;" onchange="handleFiles(this.files)">
 </div>
 
 <div class="main">
@@ -165,15 +166,16 @@ body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:#f0
     <div class="sb-list" id="sbList"></div>
   </div>
   <div class="detail" id="detail"
-    ondragover="event.preventDefault()"
-    ondrop="event.preventDefault();handleFiles(event.dataTransfer.files)">
+    ondragover="event.preventDefault();this.classList.add('drag-over')"
+    ondragleave="this.classList.remove('drag-over')"
+    ondrop="event.preventDefault();this.classList.remove('drag-over');handleFiles(event.dataTransfer.files)">
     <div class="empty">
-      <div class="empty-icon">💬</div>
-      <p>왼쪽에서 학생을 선택하세요</p>
-      <div class="hint-box">
-        📷 <strong>스크린샷 업로드</strong>를 누르거나<br>
-        이 영역에 이미지를 드래그하면<br>
+      <div class="empty-icon">🖼️</div>
+      <p style="font-weight:700;font-size:16px;color:#1e40af;">카카오톡 대화 스크린샷을<br>여기에 끌어다 놓으세요</p>
+      <div class="hint-box" style="border:2.5px dashed #3b82f6;background:#eff6ff;padding:20px 24px;border-radius:14px;margin-top:12px;">
+        🖱️ <strong>드래그앤드롭</strong>으로 사진을 올리면<br>
         AI가 자동으로 상담 기록을 추가해요<br><br>
+        📁 여러 장을 한 번에 올릴 수 있어요<br><br>
         💾 모든 기록은 서버에 저장되어<br>
         <strong>모든 선생님이 공유</strong>합니다
       </div>
@@ -435,8 +437,17 @@ async function handleFiles(files) {
         const res = await api("parse", "POST", { imageBase64: b64, mediaType: file.type || "image/png" });
         const rec = Array.isArray(res.data) ? res.data[0] : res.data;
         if (!rec || !rec.student) throw new Error('분석 결과 없음');
-        await api("record", "POST", rec);
-        records.unshift(rec);
+        // 같은 날짜 + 같은 학생이면 기존 기록에 병합
+        const existing = records.find(r => r.student === rec.student && r.date === rec.date);
+        if (existing) {
+          existing.qna = [...(existing.qna||[]), ...(rec.qna||[])];
+          existing.tags = [...new Set([...(existing.tags||[]), ...(rec.tags||[])])];
+          if (rec.imgs?.[0]) existing.imgs = [...(existing.imgs||[]), ...rec.imgs];
+          await api("record", "POST", existing); // 덮어쓰기
+        } else {
+          await api("record", "POST", rec);
+          records.unshift(rec);
+        }
         ok++;
       } catch(e) {
         fail++;
