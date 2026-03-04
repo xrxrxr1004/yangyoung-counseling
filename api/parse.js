@@ -7,29 +7,27 @@ async function uploadToCloudinary(imageBase64, mediaType) {
   const timestamp = Math.floor(Date.now() / 1000);
   const folder = 'yangyoung-counseling';
 
-  const crypto = await import('crypto');
+  const { createHash } = await import('crypto');
   const sigStr = `folder=${folder}&timestamp=${timestamp}${apiSecret}`;
-  const signature = crypto.createHash('sha1').update(sigStr).digest('hex');
+  const signature = createHash('sha1').update(sigStr).digest('hex');
 
-  // URLSearchParams 대신 FormData 방식으로 직접 multipart 구성
-  const boundary = '----FormBoundary' + Math.random().toString(36).slice(2);
-  const dataUri = `data:${mediaType};base64,${imageBase64}`;
-
-  let body = '';
-  const fields = { file: dataUri, api_key: apiKey, timestamp: String(timestamp), signature, folder };
-  for (const [k, v] of Object.entries(fields)) {
-    body += `--${boundary}\r\nContent-Disposition: form-data; name="${k}"\r\n\r\n${v}\r\n`;
-  }
-  body += `--${boundary}--\r\n`;
+  // Cloudinary는 data URI 형식으로 base64 직접 수신 가능
+  const params = new URLSearchParams({
+    file: `data:${mediaType};base64,${imageBase64}`,
+    api_key: apiKey,
+    timestamp: String(timestamp),
+    signature,
+    folder
+  });
 
   const r = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
     method: 'POST',
-    headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}` },
-    body
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: params.toString()
   });
 
   const data = await r.json();
-  if (!r.ok || data.error) throw new Error(`Cloudinary 오류: ${data.error?.message || r.status}`);
+  if (!r.ok || data.error) throw new Error(`Cloudinary 오류: ${JSON.stringify(data.error)}`);
   return data.secure_url;
 }
 
@@ -104,9 +102,11 @@ export default async function handler(req, res) {
     if (!aiResponse.ok) return res.status(500).json({ error: aiRes.error?.message || 'Claude API 오류' });
 
     const text = aiRes.content?.[0]?.text || '';
-    const clean = text.replace(/```json|```/g, '').trim();
+    // JSON 블록 추출 (앞뒤 텍스트 무시)
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return res.status(500).json({ error: 'JSON 추출 실패', raw: text });
     let parsed;
-    try { parsed = JSON.parse(clean); }
+    try { parsed = JSON.parse(jsonMatch[0]); }
     catch { return res.status(500).json({ error: 'JSON 파싱 실패', raw: text }); }
 
     parsed.id = 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
