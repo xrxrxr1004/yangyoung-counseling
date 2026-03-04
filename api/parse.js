@@ -1,112 +1,611 @@
-async function uploadToCloudinary(imageBase64, mediaType) {
-  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-  if (!cloudName) throw new Error('CLOUDINARY_CLOUD_NAME 없음');
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>양영학원 상담 관리</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:#f0f2f7;color:#111827;height:100vh;display:flex;flex-direction:column;overflow:hidden;}
 
-  // Buffer를 Blob으로 변환해서 FormData에 추가
-  const buffer = Buffer.from(imageBase64, 'base64');
-  const ext = mediaType.split('/')[1] || 'png';
-  const blob = new Blob([buffer], { type: mediaType });
+.topbar{background:#fff;border-bottom:1px solid #e4e8f0;padding:0 18px;height:54px;display:flex;align-items:center;gap:10px;flex-shrink:0;box-shadow:0 1px 4px rgba(0,0,0,.07);}
+.logo{font-size:15px;font-weight:700;}.logo span{color:#2563eb;}
+.spacer{flex:1;}
+.stat{font-size:12px;color:#9ca3af;}.stat strong{color:#374151;}
+.sync-indicator{font-size:11.5px;color:#9ca3af;display:flex;align-items:center;gap:4px;}
+.sync-dot{width:6px;height:6px;border-radius:50%;background:#10b981;}
+.sync-dot.syncing{background:#f59e0b;animation:pulse 1s infinite;}
+.sync-dot.error{background:#ef4444;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
+.btn{border-radius:8px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:5px;border:none;transition:all .15s;}
+.btn-ghost{background:#f8f9fc;border:1px solid #e4e8f0;color:#374151;}
+.btn-ghost:hover{background:#e4e8f0;}
+.btn-primary{background:#2563eb;color:#fff;}
+.btn-primary:hover{background:#1d4ed8;}
 
-  const form = new FormData();
-  form.append('file', blob, `upload.${ext}`);
-  form.append('upload_preset', 'yangyoung');
+.main{display:flex;flex:1;overflow:hidden;}
 
-  const r = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
-    method: 'POST',
-    body: form
-  });
+.sidebar{width:268px;flex-shrink:0;background:#fff;border-right:1px solid #e4e8f0;display:flex;flex-direction:column;overflow:hidden;}
+.sb-top{padding:10px 12px;border-bottom:1px solid #edf0f7;}
+.sb-search{width:100%;background:#f0f2f7;border:1.5px solid #e4e8f0;border-radius:8px;padding:7px 11px 7px 32px;font-size:13px;outline:none;font-family:inherit;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:10px center;}
+.sb-search:focus{border-color:#2563eb;background-color:#fff;}
+.filter-row{padding:7px 12px 8px;border-bottom:1px solid #edf0f7;display:flex;flex-wrap:wrap;gap:4px;}
+.fc{border:1.5px solid #e4e8f0;background:#fff;border-radius:16px;padding:3px 9px;font-size:11px;cursor:pointer;color:#6b7280;font-family:inherit;transition:all .12s;}
+.fc.on{background:#2563eb;border-color:#2563eb;color:#fff;font-weight:700;}
+.sb-list{overflow-y:auto;flex:1;}
+.sb-date{font-size:10.5px;font-weight:700;color:#9ca3af;padding:7px 12px 3px;background:#f8f9fc;border-bottom:1px solid #edf0f7;position:sticky;top:0;}
+.sb-item{padding:10px 12px;border-bottom:1px solid #f5f7fa;cursor:pointer;display:flex;align-items:center;gap:9px;transition:background .1s;border-left:3px solid transparent;}
+.sb-item:hover{background:#f8f9fc;}
+.sb-item.active{background:#eff6ff;border-left-color:#2563eb;}
+.sb-item.checked{background:#fef3c7;border-left-color:#f59e0b;}
+.sb-item .cb{width:16px;height:16px;cursor:pointer;flex-shrink:0;accent-color:#2563eb;}
+#selBar{display:none;padding:8px 12px;background:#fef3c7;border-bottom:1px solid #fde68a;font-size:13px;align-items:center;justify-content:space-between;}
+#selBar.show{display:flex;}
+.btn-del-sel{background:#dc2626;color:#fff;border:none;padding:5px 12px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600;}
+.av{width:33px;height:33px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0;}
+.sb-nm{font-size:13px;font-weight:600;}
+.sb-sc{font-size:11px;color:#9ca3af;margin-top:1px;}
+.sb-tags{display:flex;gap:3px;margin-top:3px;flex-wrap:wrap;}
+.sb-t{background:#f1f5f9;color:#64748b;border-radius:7px;padding:1px 6px;font-size:10px;}
 
+.detail{flex:1;overflow-y:auto;padding:22px 24px;}
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#9ca3af;gap:12px;text-align:center;}
+.empty-icon{font-size:50px;opacity:.3;}
+.hint-box{background:#fff;border:1.5px dashed #e4e8f0;border-radius:12px;padding:18px 24px;max-width:300px;margin-top:8px;font-size:12.5px;line-height:1.9;color:#6b7280;}
+.hint-box strong{color:#2563eb;}
+
+.d-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:16px;}
+.d-av-row{display:flex;align-items:center;gap:12px;}
+.d-av{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;color:#fff;}
+.d-name{font-size:20px;font-weight:700;}
+.d-meta{font-size:12.5px;color:#6b7280;margin-top:3px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+.d-date{background:#dbeafe;color:#1e40af;border-radius:6px;padding:2px 9px;font-size:11.5px;font-weight:600;}
+.d-acts{display:flex;gap:6px;flex-shrink:0;}
+.btn-edit{background:#fff;border:1.5px solid #e4e8f0;border-radius:8px;padding:7px 12px;font-size:12.5px;font-weight:600;cursor:pointer;color:#374151;font-family:inherit;}
+.btn-edit:hover{border-color:#2563eb;color:#2563eb;}
+.btn-del{background:#fff;border:1.5px solid #fecaca;border-radius:8px;padding:7px 12px;font-size:12.5px;font-weight:600;cursor:pointer;color:#dc2626;font-family:inherit;}
+.btn-del:hover{background:#fef2f2;}
+.d-tags{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:16px;}
+.d-tag{background:#dbeafe;color:#1e40af;border-radius:20px;padding:3px 11px;font-size:12px;font-weight:600;}
+.sec-lbl{font-size:10.5px;font-weight:700;color:#9ca3af;letter-spacing:.6px;text-transform:uppercase;margin-bottom:8px;}
+.qna-card{background:#fff;border-radius:12px;border:1px solid #e4e8f0;overflow:hidden;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.05);}
+.qna-row{padding:12px 15px;border-bottom:1px solid #f1f5f9;}
+.qna-row:last-child{border-bottom:none;}
+.q-line,.a-line{display:flex;gap:7px;align-items:flex-start;}
+.q-line{margin-bottom:5px;}
+.bdg{border-radius:5px;padding:2px 6px;font-size:10px;font-weight:700;flex-shrink:0;margin-top:2px;white-space:nowrap;}
+.bdg-q{background:#f1f5f9;color:#64748b;}
+.bdg-a{background:#dbeafe;color:#1d4ed8;}
+.qt{font-size:13px;color:#374151;line-height:1.7;white-space:pre-line;}
+.at{font-size:13px;color:#1d4ed8;line-height:1.7;font-weight:500;white-space:pre-line;}
+.thumbs{display:flex;gap:7px;flex-wrap:wrap;}
+.thumb{width:90px;height:68px;object-fit:cover;border-radius:7px;border:1.5px solid #e4e8f0;cursor:pointer;transition:all .15s;}
+.thumb:hover{border-color:#2563eb;transform:scale(1.03);}
+
+.overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.75);z-index:200;align-items:center;justify-content:center;backdrop-filter:blur(4px);}
+.overlay.show{display:flex;}
+.overlay-box{background:#fff;border-radius:18px;padding:36px 40px;text-align:center;max-width:360px;width:90%;box-shadow:0 20px 50px rgba(0,0,0,.2);}
+.spinner{width:48px;height:48px;border:4px solid #e4e8f0;border-top-color:#2563eb;border-radius:50%;margin:0 auto 18px;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.overlay-box h3{font-size:16px;font-weight:700;margin-bottom:6px;}
+.overlay-box p{font-size:13px;color:#6b7280;line-height:1.6;}
+.overlay-step{font-size:11.5px;color:#9ca3af;margin-top:8px;}
+
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:100;align-items:center;justify-content:center;backdrop-filter:blur(3px);}
+.modal-bg.show{display:flex;}
+.modal{background:#fff;border-radius:16px;width:620px;max-width:95vw;max-height:91vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);}
+.modal-head{padding:18px 22px 14px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:#fff;z-index:1;}
+.modal-title{font-size:15px;font-weight:700;display:flex;align-items:center;gap:7px;}
+.modal-badge{background:#d1fae5;color:#065f46;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700;}
+.modal-close{background:none;border:none;cursor:pointer;font-size:19px;color:#9ca3af;}
+.modal-body{padding:18px 22px 0;}
+.f-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;}
+.f-field{display:flex;flex-direction:column;gap:4px;}
+.f-label{font-size:11.5px;font-weight:600;color:#6b7280;}
+.f-input,.f-textarea{border:1.5px solid #e4e8f0;border-radius:8px;padding:7px 10px;font-size:13px;outline:none;font-family:inherit;color:#111;transition:border-color .12s;width:100%;}
+.f-input:focus,.f-textarea:focus{border-color:#2563eb;}
+.f-textarea{resize:vertical;min-height:52px;line-height:1.6;}
+.qna-er{border:1.5px solid #e4e8f0;border-radius:8px;overflow:hidden;margin-bottom:6px;position:relative;}
+.qna-er-inner{padding:10px 32px 10px 11px;}
+.qna-er-del{position:absolute;top:7px;right:8px;background:none;border:none;cursor:pointer;color:#d1d5db;font-size:14px;}
+.qna-er-del:hover{color:#dc2626;}
+.qna-er-ql{font-size:10px;font-weight:700;color:#9ca3af;margin-bottom:3px;}
+.qna-er-al{font-size:10px;font-weight:700;color:#2563eb;margin:7px 0 3px;}
+.btn-add-qna{background:#f8f9fc;border:1.5px dashed #e4e8f0;border-radius:8px;width:100%;padding:8px;font-size:12.5px;color:#9ca3af;cursor:pointer;font-family:inherit;transition:all .12s;}
+.btn-add-qna:hover{border-color:#2563eb;color:#2563eb;background:#eff6ff;}
+.tags-field{display:flex;flex-wrap:wrap;gap:5px;border:1.5px solid #e4e8f0;border-radius:8px;padding:6px 10px;min-height:38px;cursor:text;}
+.tags-field:focus-within{border-color:#2563eb;}
+.tag-pill{background:#dbeafe;color:#1e40af;border-radius:20px;padding:2px 9px;font-size:11.5px;font-weight:600;display:flex;align-items:center;gap:3px;}
+.tag-pill button{background:none;border:none;cursor:pointer;color:#6366f1;font-size:12px;line-height:1;padding:0;}
+.tag-txt{border:none;outline:none;font-size:12.5px;font-family:inherit;min-width:60px;flex:1;background:transparent;}
+.modal-foot{padding:14px 22px;border-top:1px solid #f1f5f9;display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:0;background:#fff;}
+.btn-cancel{background:#fff;border:1.5px solid #e4e8f0;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;color:#6b7280;font-family:inherit;}
+.btn-save{background:#2563eb;border:none;border-radius:8px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer;color:#fff;font-family:inherit;}
+
+.confirm-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:300;align-items:center;justify-content:center;}
+.confirm-bg.show{display:flex;}
+.confirm-box{background:#fff;border-radius:14px;padding:26px 26px 20px;width:320px;box-shadow:0 12px 40px rgba(0,0,0,.18);text-align:center;}
+.confirm-box h3{font-size:15px;font-weight:700;margin-bottom:7px;}
+.confirm-box p{font-size:13px;color:#6b7280;margin-bottom:18px;line-height:1.6;}
+.confirm-btns{display:flex;gap:7px;justify-content:center;}
+
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(10px);background:#1f2937;color:#fff;padding:10px 18px;border-radius:9px;font-size:13px;font-weight:500;z-index:999;opacity:0;transition:all .3s;pointer-events:none;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+.toast.ok{background:#065f46;}
+.toast.err{background:#991b1b;}
+
+.lb{display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:400;align-items:center;justify-content:center;}
+.lb.show{display:flex;}
+.lb-img{max-width:88vw;max-height:88vh;object-fit:contain;border-radius:10px;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">📋 <span>양영학원</span> 상담 관리</div>
+  <div class="spacer"></div>
+  <div class="sync-indicator"><div class="sync-dot" id="syncDot"></div><span id="syncText">연결됨</span></div>
+  <div class="stat" id="statEl" style="margin-left:8px"></div>
+  <button class="btn btn-ghost" onclick="openManual(null)">✏️ 직접 입력</button>
+  <label for="fileIn" class="btn btn-primary" style="cursor:pointer">📷 스크린샷 업로드</label>
+  <input type="file" id="fileIn" accept="image/*" multiple style="display:none" onchange="handleFiles(this.files)">
+</div>
+
+<div class="main">
+  <div class="sidebar">
+    <div class="sb-top">
+      <input class="sb-search" id="searchIn" placeholder="이름·학교·내용 검색..." oninput="renderList()">
+      <div id="selBar">
+        <span id="selCount">0건 선택됨</span>
+        <button class="btn-del-sel" onclick="deleteSelected()">🗑️ 선택 삭제</button>
+      </div>
+    </div>
+    <div class="filter-row" id="filterRow"></div>
+    <div class="sb-list" id="sbList"></div>
+  </div>
+  <div class="detail" id="detail"
+    ondragover="event.preventDefault()"
+    ondrop="event.preventDefault();handleFiles(event.dataTransfer.files)">
+    <div class="empty">
+      <div class="empty-icon">💬</div>
+      <p>왼쪽에서 학생을 선택하세요</p>
+      <div class="hint-box">
+        📷 <strong>스크린샷 업로드</strong>를 누르거나<br>
+        이 영역에 이미지를 드래그하면<br>
+        AI가 자동으로 상담 기록을 추가해요<br><br>
+        💾 모든 기록은 서버에 저장되어<br>
+        <strong>모든 선생님이 공유</strong>합니다
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="overlay-box">
+    <div class="spinner"></div>
+    <h3>AI 분석 중...</h3>
+    <p>카카오 대화 내용을 읽고<br>상담 기록으로 변환하고 있어요.</p>
+    <div class="overlay-step" id="overlayStep">준비 중...</div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title" id="modalTitle">상담 기록</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-foot">
+      <button class="btn-cancel" onclick="closeModal()">취소</button>
+      <button class="btn-save" id="saveBtn">저장</button>
+    </div>
+  </div>
+</div>
+
+<div class="confirm-bg" id="confirmBg">
+  <div class="confirm-box">
+    <h3>🗑️ 기록 삭제</h3>
+    <p id="confirmMsg"></p>
+    <div class="confirm-btns">
+      <button class="btn-cancel" onclick="closeConfirm()">취소</button>
+      <button class="btn-save" style="background:#dc2626" onclick="doDelete()">삭제</button>
+    </div>
+  </div>
+</div>
+
+<div class="lb" id="lb" onclick="this.classList.remove('show')">
+  <img class="lb-img" id="lbImg" src="" alt="">
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const SEED = [{"id": "r001", "date": "2026-03-02", "student": "김예지", "school": "", "grade": "", "qna": [{"q": "수학이 목, 일로 정해져서 영어 토·일 2반으로 픽스해서 다닐 수 있을 것 같습니다. 근데 토요일은 앞 학원이 4시에 끝나서 15분 정도 늦을 것 같아요.", "a": "그건 괜찮아요! 진도 빠지지 않을거니까 그 때 봐요!!"}], "tags": ["시간표", "수업조율"], "imgs": []}, {"id": "r002", "date": "2026-03-03", "student": "김경민", "school": "도안고등학교", "grade": "2학년", "qna": [{"q": "전 과목 교재 목록 노트 메모 전달:\n화법과작문(천재교육) / 경제수학(광주광역시교육청) / 영독작(비상) / 생윤(금성) / 사문(비상) / 일본문화(경기도교육청) / 심화국어(상문연구사) / 심리학(씨마스) / 진로영어(능률김) / 생활과학(대구광역시교육청) / 스포츠생활(천재교과서)", "a": "(교재목록 수신 완료)"}], "tags": ["교재확인"], "imgs": []}, {"id": "r003", "date": "2026-03-04", "student": "이윤정", "school": "대전외국어고등학교", "grade": "", "qna": [{"q": "저희 교재 inside reading 4 쓴대요", "a": "이거 맞나요!? 저자랑 edition 같은 것도 확인 가능하면 알려주세요!"}, {"q": "(확인 후) 링크를 이렇게 받긴 했어요. 맞는 것 같아요.", "a": "(구입 링크 확인 완료)"}], "tags": ["교재확인"], "imgs": []}, {"id": "r004", "date": "2026-03-04", "student": "이승연", "school": "충남여자고등학교", "grade": "2학년", "qna": [{"q": "영어 부교재: 수특 라이트 영어독해연습 (교보문고 링크 공유)", "a": "(수신 완료 — EBS 수능특강 Light 고등 영어독해연습 2026)"}], "tags": ["교재확인"], "imgs": []}, {"id": "r005", "date": "2026-03-04", "student": "윤영", "school": "대전외국어고등학교", "grade": "", "qna": [{"q": "교과서 사진 전달 (YBM High School Common English 1·2)", "a": "(수신 완료)"}], "tags": ["교재확인"], "imgs": []}, {"id": "r006", "date": "2026-03-04", "student": "박시우", "school": "대전지족고등학교", "grade": "", "qna": [{"q": "대전지족고등학교 영어 교과서입니다. (Visang High School Common English 1·2 사진 전달)", "a": "(수신 완료)"}], "tags": ["교재확인"], "imgs": []}, {"id": "r007", "date": "2026-03-04", "student": "조원희", "school": "우송고등학교", "grade": "2학년", "qna": [{"q": "수능특강 시험범위표 사진 전달\n▸ A유형편 실제수업(18문항): 3함축의미·6주제·7제목·11어법·12어휘·13빈칸·14빈칸·16순서·17삽입\n▸ A유형편 시험범위(22문항): 위 + 4요지·18요약\n▸ B주제편(18문항): 21철학·22환경·24스포츠·25교육·26언어·27컴퓨터·28심리·29정치·30의학\n※ 22환경·26언어는 2번 문항 제외, 1·3번만", "a": "네 (수신 완료)"}], "tags": ["시험범위"], "imgs": []}, {"id": "r008", "date": "2026-03-04", "student": "김수헌", "school": "대전외국어고등학교", "grade": "", "qna": [{"q": "목요일에는 7시 이후로만 시간이 돼서 5시 30분은 어려울 것 같습니다.", "a": "아~ 그럼 혹시 스케줄 한번 적어서 보내주면 다른 시간 찾아볼게요~"}, {"q": "월·화 스케줄 없고, 수요일은 6시 이후 학원 있어서 어렵고, 목요일은 7시 이후 가능합니다. 금요일은 5시 이후 다 가능해요.", "a": "우선 목요일(7~10시), 일요일(4~7시)가 수특 메인으로 하니까 그 때 보고 뒤에 좀 이어서 하거나 그렇게 해요!"}, {"q": "원서는 5단원만 진도 나간대요", "a": "아하~ 알겠습니다!"}], "tags": ["시간표", "수업조율"], "imgs": []}, {"id": "r009", "date": "2026-03-04", "student": "김효인", "school": "", "grade": "", "qna": [{"q": "(교과서 사진 전달 — Common English 1 포함)\n모든 교과서 다 찍어야 돼요?", "a": "넵 넓게 두고 크게 찍어도 돼요!"}], "tags": ["교재확인"], "imgs": []}, {"id": "r010", "date": "2026-03-04", "student": "정하율", "school": "대전외국어고등학교", "grade": "1학년", "qna": [{"q": "심화영어 1 교재입니다. (Skillful 3 Reading and Writing B2)\n구입처: 롯데시청점(010-9555-2320), 타임문교시점(042-489-5000), 잉글리쉬플러스(042-483-5631)", "a": "네! 고마워요!"}], "tags": ["교재확인"], "imgs": []}, {"id": "r011", "date": "2026-03-04", "student": "문소은", "school": "", "grade": "", "qna": [{"q": "[학생] 수업질문", "a": "질문시에는 교재/질문내용을 입력해주세요.\n예) 교과서 3과 본문 해석이 안됩니다. 본문은 사진찍어보내주세요. (챗봇 자동응답)"}, {"q": "넵 알겠습니다", "a": "학교 교과서 사진 찍어서 부탁해요! 그리고 휴대폰 사용에 제한이 있거나 그렇나요!?"}], "tags": ["수업질문", "기타"], "imgs": []}, {"id": "r012", "date": "2026-03-04", "student": "안정훈", "school": "", "grade": "", "qna": [{"q": "일요일에 수업한 수특 2강 해설 좀 보내주세요", "a": "해설이라함은 수특독해 답지를 얘기하는건가요!? 아님 정리해서 준 요약본 인가요?"}, {"q": "둘다 보내주세여", "a": "해설은 전체적으로 나온 게 있어서 이걸로 보내줄게요!\n(수능특강영어독해_2강 PDF + EBS_2026학년도_수특 PDF 전송)"}], "tags": ["자료요청"], "imgs": []}, {"id": "r013", "date": "2026-03-04", "student": "양현유", "school": "대전외국어고등학교", "grade": "3학년", "qna": [{"q": "영어독해연습 3강까지 중간고사 범위라고 공지하셨어요!\n(수행평가: 심화 독해 기반 논술적 에세이 작성 15점)", "a": "수특 영어는 얘기 없죠!?"}], "tags": ["시험범위", "수행평가"], "imgs": []}, {"id": "r014", "date": "2026-03-04", "student": "김라희", "school": "공주사범대학교부설고등학교", "grade": "1학년", "qna": [{"q": "보충교재는 아직 안 나왔고 교과서는 보내드릴게요. (NE능률 Common English 1)\n휴대폰 사용시간이 5시 30분부터 한시간정도인데 이외시간에는 패드나 폰같은 전자기기 아예 안돼요ㅠㅠ", "a": "평일에는 링크 하기 어려울 수 있겠네요~\n평일은 수행평가 관련 내용 정리해뒀다가 시험범위·수행평가 내용으로 소통하고,\n주말에 제한 없다면 링크로 필요한 내용 공유할게요!\n우선 주말 사용이 어떤지 업데이트 해주세요!"}], "tags": ["교재확인", "기타"], "imgs": []}];
+
+const COLORS = ["#1d4ed8","#7c3aed","#dc2626","#ea580c","#16a34a","#0891b2","#db2777","#65a30d","#b45309","#475569","#be185d","#0369a1"];
+const TAGS = ["시간표","수업조율","교재확인","시험범위","수행평가","자료요청","수업질문","기타"];
+
+let records = [], activeId = null, filter = null, pendingDel = null, editingId = null, selectedIds = new Set();
+let modalTags = [], currentImgB64 = null, currentParsed = null;
+let isSynced = false;
+
+// ── SYNC STATE ──
+function setSyncState(state) {
+  const dot = document.getElementById("syncDot");
+  const txt = document.getElementById("syncText");
+  dot.className = "sync-dot" + (state==="syncing"?" syncing":state==="error"?" error":"");
+  txt.textContent = state==="syncing"?"동기화 중...":state==="error"?"연결 오류":"연결됨";
+}
+
+// ── API ──
+async function api(path, method="GET", body=null) {
+  const opts = { method, headers: {"Content-Type":"application/json"} };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch("/api/" + path, { ...opts, cache: "no-store" });
   const data = await r.json();
-  if (!r.ok || data.error) throw new Error(`Cloudinary 오류: ${JSON.stringify(data.error)}`);
-  return data.secure_url;
+  if (!r.ok) throw new Error(data.error || "API error");
+  return data;
 }
 
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-
-  const { imageBase64, mediaType } = req.body;
-  if (!imageBase64) return res.status(400).json({ error: 'imageBase64 필요' });
-
-  const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-  if (!ANTHROPIC_API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY 없음' });
-
-  const today = new Date().toISOString().slice(0, 10);
-
-  const prompt = `이 이미지는 카카오톡 학생 상담 대화 스크린샷입니다.
-아래 JSON 형식으로 정보를 추출하세요. JSON만 출력하고 다른 텍스트는 절대 포함하지 마세요.
-
-{
-  "date": "YYYY-MM-DD",
-  "student": "학생 이름",
-  "school": "학교명",
-  "grade": "학년",
-  "qna": [
-    { "q": "학생 발화", "a": "선생님 답변" }
-  ],
-  "tags": ["태그"]
-}
-
-규칙:
-- date: 카카오톡 대화 날짜. 형식은 반드시 YYYY-MM-DD. 이미지에서 찾기 어려우면 오늘(${today}) 사용. 절대 시각(예: 8:30, 오후 5시)을 날짜로 혼동하지 말 것.
-- student: 채팅방 상대방 한국어 이름 그대로. 절대 번역하지 말 것.
-- school: 학교명 한국어 그대로. 없으면 빈 문자열. 절대 영어로 번역하지 말 것.
-- grade: 학년. 없으면 빈 문자열.
-- qna: 카카오톡에서 오른쪽 노란색/초록색 말풍선 = 선생님(나)가 보낸 메시지 = a. 왼쪽 흰색/회색 말풍선 = 학생이 보낸 메시지 = q. 절대 반대로 혼동하지 말 것. 여러 개면 배열로.
-- tags: 교재확인/시간표/수업조율/시험범위/수행평가/자료요청/수업질문/기타 중 해당하는 것만 선택.`;
-
+// ── LOAD from server ──
+async function loadRecords() {
+  setSyncState("syncing");
   try {
-    // 1. Cloudinary 이미지 업로드 (먼저)
-    let imgUrl = null;
-    let cloudinaryError = null;
-    try {
-      imgUrl = await uploadToCloudinary(imageBase64, mediaType || 'image/png');
-    } catch (e) {
-      cloudinaryError = e.message;
-      console.error('Cloudinary 실패:', e.message);
+    const res = await api("records");
+    records = res.data;
+    if (!records.length) {
+      records = [...SEED];
     }
-
-    // 2. Claude AI 분석
-    const aiResponse = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-5',
-        max_tokens: 1024,
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'image', source: { type: 'base64', media_type: mediaType || 'image/png', data: imageBase64 } },
-            { type: 'text', text: prompt }
-          ]
-        }]
-      })
-    });
-
-    const aiRes = await aiResponse.json();
-    if (!aiResponse.ok) return res.status(500).json({ error: aiRes.error?.message || 'Claude API 오류' });
-
-    const text = aiRes.content?.[0]?.text || '';
-    // JSON 블록 추출 (앞뒤 텍스트 무시)
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return res.status(500).json({ error: 'JSON 추출 실패', raw: text });
-    let parsed;
-    try { parsed = JSON.parse(jsonMatch[0]); }
-    catch { return res.status(500).json({ error: 'JSON 파싱 실패', raw: text }); }
-
-    parsed.id = 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
-    parsed.imgs = imgUrl ? [imgUrl] : [];
-
-    return res.status(200).json({ success: true, data: parsed, cloudinaryUrl: imgUrl, cloudinaryError });
-
-  } catch (e) {
-    return res.status(500).json({ error: e.message });
+    isSynced = true;
+    setSyncState("ok");
+    renderFilters();
+    renderList();
+  } catch(e) {
+    records = [...SEED];
+    setSyncState("error");
+    renderFilters();
+    renderList();
+    toast("서버 연결 실패 — 로컬 모드로 실행 중", "err");
   }
 }
+
+// ── UTILS ──
+function avColor(name) {
+  let h = 0; for (const c of name) h = (h*31 + c.charCodeAt(0)) % COLORS.length;
+  return COLORS[h];
+}
+function fmtDate(d) {
+  if (!d) return "";
+  const [y,m,dd] = d.split("-");
+  return `${parseInt(m)}월 ${parseInt(dd)}일 (${["일","월","화","수","목","금","토"][new Date(d).getDay()]})`;
+}
+function uid() { return "r" + Date.now().toString(36) + Math.random().toString(36).slice(2,5); }
+function toast(msg, type="") {
+  const el = document.getElementById("toast");
+  el.textContent = msg; el.className = "toast show " + type;
+  setTimeout(()=>el.className="toast", 2800);
+}
+
+// ── FILTERS ──
+function renderFilters() {
+  let h = `<button class="fc ${!filter?"on":""}" onclick="setFilter(null)">전체</button>`;
+  TAGS.forEach(t => {
+    const cnt = records.filter(r=>(r.tags||[]).includes(t)).length;
+    if (!cnt) return;
+    h += `<button class="fc ${filter===t?"on":""}" onclick="setFilter('${t}')">${t} ${cnt}</button>`;
+  });
+  document.getElementById("filterRow").innerHTML = h;
+  document.getElementById("statEl").innerHTML = `총 <strong>${records.length}</strong>건`;
+}
+function setFilter(t) { filter=t; renderFilters(); renderList(); }
+
+// ── LIST ──
+function toggleSelect(id) {
+  if (selectedIds.has(id)) selectedIds.delete(id);
+  else selectedIds.add(id);
+  const bar = document.getElementById("selBar");
+  const cnt = document.getElementById("selCount");
+  if (selectedIds.size > 0) { bar.classList.add("show"); cnt.textContent = selectedIds.size + "건 선택됨"; }
+  else bar.classList.remove("show");
+  renderList();
+}
+
+async function deleteSelected() {
+  if (!selectedIds.size) return;
+  if (!confirm(`선택한 ${selectedIds.size}건을 모두 삭제할까요?`)) return;
+  let ok = 0;
+  for (const id of [...selectedIds]) {
+    try {
+      await api("record", "DELETE", { id });
+      records = records.filter(r => r.id !== id);
+      ok++;
+    } catch(e) { console.error(e); }
+  }
+  selectedIds.clear();
+  document.getElementById("selBar").classList.remove("show");
+  if (activeId && !records.find(r=>r.id===activeId)) {
+    activeId = null;
+    document.getElementById("detail").innerHTML = `<div class="empty"><div class="empty-icon">💬</div><p>왼쪽에서 학생을 선택하세요</p></div>`;
+  }
+  renderFilters(); renderList();
+  toast(ok + "건 삭제됐습니다.");
+}
+
+function renderList() {
+  const q = document.getElementById("searchIn").value.toLowerCase();
+  const filtered = records.filter(r => {
+    const mf = !filter || (r.tags||[]).includes(filter);
+    const ms = !q || r.student.includes(q) || (r.school||"").includes(q) ||
+      (r.qna||[]).some(qa=>(qa.q+qa.a).toLowerCase().includes(q));
+    return mf && ms;
+  }).sort((a,b)=>b.date.localeCompare(a.date));
+
+  const groups = {};
+  filtered.forEach(r=>{ if(!groups[r.date]) groups[r.date]=[]; groups[r.date].push(r); });
+
+  const list = document.getElementById("sbList");
+  if (!filtered.length) { list.innerHTML='<div style="padding:20px;text-align:center;color:#9ca3af;font-size:13px;">검색 결과 없음</div>'; return; }
+
+  let h = "";
+  Object.keys(groups).sort((a,b)=>b.localeCompare(a)).forEach(date => {
+    h += `<div class="sb-date">${fmtDate(date)}</div>`;
+    groups[date].forEach(r => {
+      const sc = [r.school,r.grade].filter(Boolean).join(" ") || "학교 미확인";
+      const tags = (r.tags||[]).map(t=>`<span class="sb-t">${t}</span>`).join("");
+      const isChecked = selectedIds.has(r.id);
+      h += `<div class="sb-item ${r.id===activeId?"active":""} ${isChecked?"checked":""}" onclick="select('${r.id}')">
+        <input type="checkbox" class="cb" ${isChecked?"checked":""} onclick="event.stopPropagation();toggleSelect('${r.id}')" />
+        <div class="av" style="background:${avColor(r.student)}">${r.student[0]}</div>
+        <div>
+          <div class="sb-nm">${r.student}</div>
+          <div class="sb-sc">${sc}</div>
+          ${tags?`<div class="sb-tags">${tags}</div>`:""}
+        </div>
+      </div>`;
+    });
+  });
+  list.innerHTML = h;
+}
+
+// ── DETAIL ──
+function select(id) {
+  activeId = id; renderList();
+  const r = records.find(x=>x.id===id); if (!r) return;
+  const sc = [r.school,r.grade].filter(Boolean).join(" ");
+  const tags = (r.tags||[]).map(t=>`<span class="d-tag">${t}</span>`).join("");
+  let qnaH = (r.qna||[]).map(qa=>`<div class="qna-row">
+    <div class="q-line"><span class="bdg bdg-q">학생</span><span class="qt">${qa.q}</span></div>
+    <div class="a-line"><span class="bdg bdg-a">선생님</span><span class="at">${qa.a}</span></div>
+  </div>`).join("");
+  let imgsH = "";
+  if (r.imgs && r.imgs.length) {
+    const ts = r.imgs.map(img=>`<img class="thumb" src="${img}" onclick="showLb('${img}')">`).join("");
+    if (ts) imgsH=`<div><div class="sec-lbl" style="margin-top:14px">대화 원문</div><div class="thumbs">${ts}</div></div>`;
+  }
+  document.getElementById("detail").innerHTML = `
+    <div class="d-top">
+      <div class="d-av-row">
+        <div class="d-av" style="background:${avColor(r.student)}">${r.student[0]}</div>
+        <div>
+          <div class="d-name">${r.student}</div>
+          <div class="d-meta">${sc?`<span>🏫 ${sc}</span>`:""}<span class="d-date">${fmtDate(r.date)}</span></div>
+        </div>
+      </div>
+      <div class="d-acts">
+        <button class="btn-edit" onclick="openEdit('${r.id}')">✏️ 수정</button>
+        <button class="btn-del" onclick="confirmDel('${r.id}')">🗑️</button>
+      </div>
+    </div>
+    ${tags?`<div class="d-tags">${tags}</div>`:""}
+    <div class="sec-lbl">상담 내용</div>
+    <div class="qna-card">${qnaH}</div>
+    ${imgsH}`;
+}
+
+// ── FILE UPLOAD & PARSE ──
+async function handleFiles(files) {
+  document.getElementById("fileIn").value = "";
+  const fileArr = Array.from(files);
+  if (fileArr.length === 1) {
+    // 1장: 기존대로 모달 확인 후 저장
+    const file = fileArr[0];
+    document.getElementById("overlayStep").textContent = `변환 중: ${file.name}`;
+    document.getElementById("overlay").classList.add("show");
+    try {
+      const b64 = await toB64(file);
+      document.getElementById("overlayStep").textContent = "Claude AI 분석 중...";
+      const res = await api("parse", "POST", { imageBase64: b64, mediaType: file.type || "image/png" });
+      document.getElementById("overlay").classList.remove("show");
+      openModal(res.data, b64);
+    } catch(e) {
+      document.getElementById("overlay").classList.remove("show");
+      toast("분석 실패: " + e.message, "err");
+    }
+  } else {
+    // 여러 장: 자동 분석 후 바로 저장
+    let ok = 0, fail = 0;
+    for (let i = 0; i < fileArr.length; i++) {
+      const file = fileArr[i];
+      document.getElementById("overlayStep").textContent = `(${i+1}/${fileArr.length}) ${file.name} 분석 중...`;
+      document.getElementById("overlay").classList.add("show");
+      try {
+        const b64 = await toB64(file);
+        const res = await api("parse", "POST", { imageBase64: b64, mediaType: file.type || "image/png" });
+        // 이미지는 Upstash 용량 초과로 저장 제외, 텍스트만 저장
+        const rec = { ...res.data }; // imgs는 parse.js에서 Cloudinary URL로 채워짐
+        await api("record", "POST", rec);
+        records.unshift(rec);
+        ok++;
+      } catch(e) {
+        fail++;
+        toast("실패: " + e.message, "err");
+        console.error(file.name, e.message);
+      }
+    }
+    document.getElementById("overlay").classList.remove("show");
+    renderFilters(); renderList();
+    toast(`✅ ${ok}건 저장 완료${fail ? ` (${fail}건 실패)` : ""}`, ok ? "ok" : "err");
+  }
+}
+function toB64(file) {
+  return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result.split(",")[1]); r.onerror=rej; r.readAsDataURL(file); });
+}
+
+// ── MODAL ──
+function openManual(record) {
+  editingId = record?.id || null; currentImgB64 = null;
+  modalTags = [...(record?.tags||[])];
+  document.getElementById("modalTitle").innerHTML = `${editingId?"✏️ 수정":"✏️ 새 상담 기록"} <span class="modal-badge">${editingId?"수정":"새 기록"}</span>`;
+  renderModalBody(record||{date:new Date().toISOString().slice(0,10)}, null);
+  document.getElementById("saveBtn").onclick = saveModal;
+  document.getElementById("modalBg").classList.add("show");
+}
+function openEdit(id) { openManual(records.find(r=>r.id===id)); }
+function openModal(parsed, imgB64) {
+  editingId = null; currentImgB64 = imgB64; currentParsed = parsed; modalTags = [...(parsed.tags||[])];
+  document.getElementById("modalTitle").innerHTML = `🤖 AI 파싱 결과 <span class="modal-badge">확인 후 저장</span>`;
+  renderModalBody(parsed, imgB64);
+  document.getElementById("saveBtn").onclick = saveModal;
+  document.getElementById("modalBg").classList.add("show");
+}
+function closeModal() { document.getElementById("modalBg").classList.remove("show"); }
+
+function renderModalBody(r, imgB64) {
+  const qna = r.qna?.length ? r.qna : [{q:"",a:""}];
+  const qnaH = qna.map((qa,i)=>`<div class="qna-er" id="qer${i}">
+    <div class="qna-er-inner">
+      <button class="qna-er-del" onclick="delQna(${i})">✕</button>
+      <div class="qna-er-ql">학생 질문</div>
+      <textarea class="f-textarea" id="qq${i}">${qa.q||""}</textarea>
+      <div class="qna-er-al">선생님 답변</div>
+      <textarea class="f-textarea" id="qa${i}">${qa.a||""}</textarea>
+    </div>
+  </div>`).join("");
+  const tagsH = modalTags.map((t,i)=>`<span class="tag-pill">${t}<button onclick="removeTag(${i})">×</button></span>`).join("");
+  document.getElementById("modalBody").innerHTML = `
+    ${imgB64?`<img src="data:image/png;base64,${imgB64}" style="max-width:100%;max-height:160px;object-fit:contain;border-radius:8px;border:1px solid #e4e8f0;margin-bottom:14px;display:block;">`:""}
+    <div class="f-grid">
+      <div class="f-field"><label class="f-label">날짜</label><input type="date" class="f-input" id="f_date" value="${r.date||new Date().toISOString().slice(0,10)}"></div>
+      <div class="f-field"><label class="f-label">학생 이름 *</label><input type="text" class="f-input" id="f_name" value="${r.student||""}" placeholder="홍길동"></div>
+      <div class="f-field"><label class="f-label">학교</label><input type="text" class="f-input" id="f_school" value="${r.school||""}" placeholder="○○고등학교"></div>
+      <div class="f-field"><label class="f-label">학년</label><input type="text" class="f-input" id="f_grade" value="${r.grade||""}" placeholder="1학년"></div>
+    </div>
+    <div class="f-field" style="margin-bottom:10px">
+      <label class="f-label" style="margin-bottom:6px">대화 내용</label>
+      <div id="qnaEd">${qnaH}</div>
+      <button class="btn-add-qna" onclick="addQna()">＋ 대화 추가</button>
+    </div>
+    <div class="f-field" style="margin-bottom:20px">
+      <label class="f-label" style="margin-bottom:6px">태그 (Enter로 추가)</label>
+      <div class="tags-field" id="tagsField" onclick="document.getElementById('tagTxt').focus()">
+        ${tagsH}<input class="tag-txt" id="tagTxt" placeholder="태그..." onkeydown="handleTagKey(event)">
+      </div>
+    </div>`;
+}
+
+function addQna() {
+  const ed = document.getElementById("qnaEd");
+  const i = ed.querySelectorAll(".qna-er").length;
+  const div = document.createElement("div");
+  div.className="qna-er"; div.id="qer"+i;
+  div.innerHTML=`<div class="qna-er-inner">
+    <button class="qna-er-del" onclick="delQna(${i})">✕</button>
+    <div class="qna-er-ql">학생 질문</div>
+    <textarea class="f-textarea" id="qq${i}"></textarea>
+    <div class="qna-er-al">선생님 답변</div>
+    <textarea class="f-textarea" id="qa${i}"></textarea>
+  </div>`;
+  ed.appendChild(div);
+}
+function delQna(i) { const el=document.getElementById("qer"+i); if(el) el.remove(); }
+function getQna() {
+  return Array.from(document.querySelectorAll("#qnaEd .qna-er")).map(row=>{
+    const i=row.id.replace("qer","");
+    return {q:(document.getElementById("qq"+i)||{}).value||"", a:(document.getElementById("qa"+i)||{}).value||""};
+  }).filter(qa=>qa.q.trim()||qa.a.trim());
+}
+function handleTagKey(e) {
+  if (e.key==="Enter"||e.key===",") {
+    e.preventDefault();
+    const v=e.target.value.trim().replace(",","");
+    if (v && !modalTags.includes(v)) { modalTags.push(v); refreshTags(); }
+    e.target.value="";
+  }
+}
+function removeTag(i) { modalTags.splice(i,1); refreshTags(); }
+function refreshTags() {
+  const field=document.getElementById("tagsField");
+  const input=document.getElementById("tagTxt");
+  field.innerHTML=modalTags.map((t,i)=>`<span class="tag-pill">${t}<button onclick="removeTag(${i})">×</button></span>`).join("");
+  field.appendChild(input);
+}
+
+async function saveModal() {
+  const date=document.getElementById("f_date").value;
+  const name=document.getElementById("f_name").value.trim();
+  if (!date||!name) { toast("날짜와 이름은 필수입니다.","err"); return; }
+  const rec = {
+    id: editingId||uid(), date, student: name,
+    school: document.getElementById("f_school").value.trim(),
+    grade: document.getElementById("f_grade").value.trim(),
+    qna: getQna(), tags: [...modalTags],
+    imgs: editingId ? (records.find(r=>r.id===editingId)?.imgs||[]) : (currentParsed?.imgs||[])
+  };
+  setSyncState("syncing");
+  try {
+    await api("record", editingId?"PUT":"POST", rec);
+    if (editingId) { const idx=records.findIndex(r=>r.id===editingId); records[idx]=rec; }
+    else records.unshift(rec);
+    setSyncState("ok");
+    closeModal(); renderFilters(); renderList(); select(rec.id);
+    toast(editingId?"✅ 수정되었습니다.":"✅ 저장되었습니다.","ok");
+  } catch(e) {
+    setSyncState("error");
+    toast("저장 실패: "+e.message,"err");
+  }
+}
+
+// ── DELETE ──
+function confirmDel(id) {
+  pendingDel=id;
+  const r=records.find(x=>x.id===id);
+  document.getElementById("confirmMsg").innerHTML=`<strong>${r.student}</strong> 학생의 기록을 삭제할까요?<br>모든 사용자에게서 삭제됩니다.`;
+  document.getElementById("confirmBg").classList.add("show");
+}
+function closeConfirm() { document.getElementById("confirmBg").classList.remove("show"); pendingDel=null; }
+async function doDelete() {
+  setSyncState("syncing");
+  try {
+    await api("record","DELETE",{id:pendingDel});
+    records=records.filter(r=>r.id!==pendingDel);
+    setSyncState("ok");
+    closeConfirm(); activeId=null;
+    document.getElementById("detail").innerHTML=`<div class="empty"><div class="empty-icon">💬</div><p>기록이 삭제되었습니다</p></div>`;
+    renderFilters(); renderList(); toast("삭제되었습니다.");
+  } catch(e) { setSyncState("error"); toast("삭제 실패: "+e.message,"err"); }
+}
+
+// ── LIGHTBOX ──
+function showLb(src) { document.getElementById("lbImg").src=src; document.getElementById("lb").classList.add("show"); }
+
+// ── KEYBOARD ──
+document.addEventListener("keydown", e=>{ if(e.key==="Escape"){ document.getElementById("lb").classList.remove("show"); closeModal(); closeConfirm(); } });
+document.getElementById("modalBg").addEventListener("click", e=>{ if(e.target===document.getElementById("modalBg")) closeModal(); });
+
+// ── POLLING: auto-refresh every 30s ──
+setInterval(async ()=>{
+  try {
+    const res = await api("records");
+    records = res.data;
+    renderFilters(); renderList();
+    if (activeId) select(activeId);
+  } catch(e) { setSyncState("error"); }
+}, 30000);
+
+// ── INIT ──
+loadRecords();
+</script>
+</body>
+</html>
