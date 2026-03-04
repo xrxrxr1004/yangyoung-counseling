@@ -391,7 +391,8 @@ async function handleFiles(files) {
       try {
         const b64 = await toB64(file);
         const res = await api("parse", "POST", { imageBase64: b64, mediaType: file.type || "image/png" });
-        const rec = { ...res.data, imgs: [`data:image/png;base64,${b64}`] };
+        // 이미지는 Upstash 용량 초과로 저장 제외, 텍스트만 저장
+        const rec = { ...res.data, imgs: [] };
         await api("record", "POST", rec);
         records.unshift(rec);
         ok++;
@@ -508,7 +509,7 @@ async function saveModal() {
     school: document.getElementById("f_school").value.trim(),
     grade: document.getElementById("f_grade").value.trim(),
     qna: getQna(), tags: [...modalTags],
-    imgs: editingId ? (records.find(r=>r.id===editingId)?.imgs||[]) : (currentImgB64?[`data:image/png;base64,${currentImgB64}`]:[])
+    imgs: editingId ? (records.find(r=>r.id===editingId)?.imgs||[]) : []  // 이미지 저장 제외 (Upstash 용량 한도)
   };
   setSyncState("syncing");
   try {
