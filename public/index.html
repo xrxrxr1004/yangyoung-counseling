@@ -339,7 +339,8 @@ async function loadRecords(){
   setSyncState("syncing");
   try{
     const res=await api("records");
-    records=res.data.map(r=>enrichWithStudent({...r}));        // ✅ enrich 적용
+    const raw=res.data.map(r=>enrichWithStudent({...r}));
+    records=mergeRecords(raw);   // 중복 병합
     setSyncState("ok");
     renderFilters();renderList();initCal();renderHome();
   }catch(e){
@@ -347,6 +348,36 @@ async function loadRecords(){
     renderFilters();renderList();initCal();renderHome();
     toast("서버 연결 실패","err");
   }
+}
+
+// 같은 날짜+학생 기록을 하나로 병합, 중복은 서버에서 삭제
+function mergeRecords(recs){
+  const map={};
+  const dupes=[];
+  recs.forEach(r=>{
+    const key=r.student+'|'+r.date;
+    if(map[key]){
+      // 기존에 병합
+      const base=map[key];
+      base.qna=[...(base.qna||[]),...(r.qna||[])];
+      base.tags=[...new Set([...(base.tags||[]),...(r.tags||[])])];
+      if(r.imgs?.length) base.imgs=[...(base.imgs||[]),...r.imgs];
+      if(r.summary&&!base.summary) base.summary=r.summary;
+      dupes.push(r.id); // 중복 기록 id 수집
+    } else {
+      map[key]={...r};
+    }
+  });
+  // 중복 기록 백그라운드 삭제 + 병합본 업데이트
+  if(dupes.length){
+    dupes.forEach(id=>api("record","DELETE",{id}).catch(()=>{}));
+    Object.values(map).forEach(r=>{
+      if(recs.some(orig=>orig.student===r.student&&orig.date===r.date&&orig.id!==r.id)){
+        api("record","PUT",r).catch(()=>{});
+      }
+    });
+  }
+  return Object.values(map).sort((a,b)=>b.date.localeCompare(a.date));
 }
 
 function avColor(name){let h=0;for(const c of name)h=(h*31+c.charCodeAt(0))%COLORS.length;return COLORS[h];}
@@ -710,7 +741,7 @@ async function handleFiles(files){
         if(!rec||!rec.student)throw new Error('분석 결과 없음');
         rec=enrichWithStudent(rec);
         const existing=records.find(r=>r.student===rec.student&&r.date===rec.date);
-        if(existing){existing.qna=[...(existing.qna||[]),...(rec.qna||[])];existing.tags=[...new Set([...(existing.tags||[]),...(rec.tags||[])])];if(rec.imgs?.[0])existing.imgs=[...(existing.imgs||[]),...rec.imgs];await api("record","POST",existing);}
+        if(existing){existing.qna=[...(existing.qna||[]),...(rec.qna||[])];existing.tags=[...new Set([...(existing.tags||[]),...(rec.tags||[])])];if(rec.imgs?.[0])existing.imgs=[...(existing.imgs||[]),...rec.imgs];await api("record","PUT",existing);}
         else{await api("record","POST",rec);records.unshift(rec);}
         ok++;
       }catch(e){fail++;toast("실패: "+e.message,"err");}
