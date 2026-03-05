@@ -716,7 +716,8 @@ async function handleFiles(files){
       }catch(e){fail++;toast("실패: "+e.message,"err");}
     }
     document.getElementById("overlay").classList.remove("show");
-    renderFilters();renderList();renderCal();
+    records.forEach(r=>{if(r.date)delete dailySummaryCache[r.date];});
+    renderFilters();renderList();renderCal();if(!activeId)renderHome();
     toast(`✅ ${ok}건 저장 완료${fail?` (${fail}건 실패)`:""}`);
   }
 }
@@ -772,7 +773,9 @@ async function saveModal(){
   try{
     await api("record",editingId?"PUT":"POST",rec);
     if(editingId){const idx=records.findIndex(r=>r.id===editingId);records[idx]=rec;}else records.unshift(rec);
-    setSyncState("ok");closeModal();renderFilters();renderList();renderCal();select(rec.id);
+    setSyncState("ok");closeModal();
+    delete dailySummaryCache[rec.date];
+    renderFilters();renderList();renderCal();select(rec.id);if(!activeId)renderHome();
     toast(editingId?"✅ 수정되었습니다.":"✅ 저장되었습니다.","ok");
   }catch(e){setSyncState("error");toast("저장 실패: "+e.message,"err");}
 }
@@ -879,7 +882,8 @@ async function runCsvAnal(){
     }catch(e){fail++;console.error(date,e.message);}
   }
   document.getElementById('overlay').classList.remove('show');
-  renderFilters();renderList();renderCal();
+  records.forEach(r=>{if(r.date)delete dailySummaryCache[r.date];});
+  renderFilters();renderList();renderCal();if(!activeId)renderHome();
   toast(`✅ ${ok}건 저장${skip?` · ${skip}건 건너뜀`:''}${fail?` · ${fail}건 실패`:''}`);
 }
 
