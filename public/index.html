@@ -473,6 +473,7 @@ function updateSelBar(){
 let isDragging=false,dragStartId=null;
 function startDragSelect(e,id){
   if(e.button!==0)return;
+  if(e.target.type==='checkbox')return; // 체크박스 클릭은 무시
   isDragging=true;dragStartId=id;
   selectedIds.clear();selectedIds.add(id);
   updateSelBar();renderList();e.preventDefault();
@@ -491,16 +492,11 @@ function endDragSelect(){isDragging=false;}
 document.addEventListener('mouseup',endDragSelect);
 
 // ────────────────────────────────────────────
-// ✅ FIX 2: 체크박스 toggle - select()와 완전 분리
-//    e.stopPropagation() + e.preventDefault() 로 부모 onclick 차단
-//    renderList 전체 재렌더 대신 DOM 직접 조작 → 체크 상태 즉시 반영
-// ────────────────────────────────────────────
 function toggleSelect(e,id){
   e.stopPropagation();
   e.preventDefault();
   if(selectedIds.has(id)) selectedIds.delete(id);
   else selectedIds.add(id);
-  // DOM 직접 업데이트 (renderList 없이)
   const item=document.querySelector(`.sb-item[data-id="${id}"]`);
   if(item){
     const cb=item.querySelector('.cb');
@@ -563,6 +559,8 @@ function renderList(){
   list.innerHTML=h;
 }
 
+function goHome(){activeId=null;renderHome();renderList();}
+
 // ── DETAIL ──
 function select(id){
   activeId=id;renderList();
@@ -576,6 +574,11 @@ function select(id){
   let imgsH="";
   if(r.imgs&&r.imgs.length){const ts=r.imgs.map(img=>`<img class="thumb" src="${img}" onclick="showLb('${img}')">`).join("");if(ts)imgsH=`<div><div class="sec-lbl" style="margin-top:14px">대화 원문</div><div class="thumbs">${ts}</div></div>`;}
   document.getElementById("detail").innerHTML=`
+    <div style="margin-bottom:12px;">
+      <button onclick="goHome()" style="background:none;border:none;cursor:pointer;font-size:12.5px;color:#6b7280;font-family:inherit;display:flex;align-items:center;gap:4px;padding:0;">
+        ← 대시보드로
+      </button>
+    </div>
     <div class="d-top">
       <div class="d-av-row">
         <div class="d-av" style="background:${avColor(r.student)}">${r.student[0]}</div>
