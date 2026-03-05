@@ -354,9 +354,59 @@ function fmtDate(d){if(!d)return"";const[y,m,dd]=d.split("-");return`${parseInt(
 function uid(){return"r"+Date.now().toString(36)+Math.random().toString(36).slice(2,5);}
 function toast(msg,type=""){const el=document.getElementById("toast");el.textContent=msg;el.className="toast show "+type;setTimeout(()=>el.className="toast",2800);}
 
-// ────────────────────────────────────────────
-// ✅ FIX 3: 홈 화면 - 오늘/최근 상담 요약
-// ────────────────────────────────────────────
+// ── AI 요약 캐시 (메모리, 새로고침 시 초기화) ──
+const summaryCache={};  // id → 요약 문자열
+
+async function fetchAISummary(r){
+  if(summaryCache[r.id]) return;
+  summaryCache[r.id]='loading';
+  const qna=(r.qna||[]).filter(qa=>qa.q||qa.a);
+  if(!qna.length){summaryCache[r.id]='(내용 없음)';updateSumEl(r.id);return;}
+  try{
+    const res=await fetch('/api/summarize',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({qna})
+    });
+    const data=await res.json();
+    summaryCache[r.id]=data.summary||'(요약 실패)';
+  }catch(e){summaryCache[r.id]='(요약 실패)';}
+  updateSumEl(r.id);
+}
+
+function updateSumEl(id){
+  if(activeId) return;
+  const el=document.getElementById('sum-'+id);
+  if(el){
+    const txt=summaryCache[id];
+    el.textContent=txt;
+    el.style.color=(txt==='(요약 실패)'||txt==='(내용 없음)')?'#d1d5db':'#374151';
+    el.style.fontSize='12px';
+  }
+}
+
+
+function renderHomeRow(r,isToday){
+  const sc=[r.school,r.grade].filter(Boolean).join(' ');
+  const tags=(r.tags||[]).slice(0,3).map(t=>`<span class="t-tag">${t}</span>`).join('');
+  const cached=summaryCache[r.id];
+  const sumHtml=cached&&cached!=='loading'
+    ?`<div id="sum-${r.id}" style="font-size:12px;color:#374151;margin-top:3px;line-height:1.5;">${cached}</div>`
+    :`<div id="sum-${r.id}" style="font-size:11.5px;color:#c4c9d4;margin-top:3px;">분석 중...</div>`;
+  return `<div class="today-row" onclick="select('${r.id}')">
+    <div class="today-av" style="background:${avColor(r.student)}">${r.student[0]}</div>
+    <div style="flex:1;min-width:0;">
+      <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;">
+        <span style="font-size:13px;font-weight:700;">${r.student}</span>
+        ${sc?`<span style="font-size:11px;color:#9ca3af;">${sc}</span>`:''}
+        ${!isToday?`<span style="font-size:10.5px;color:#d1d5db;margin-left:auto;">${fmtDate(r.date)}</span>`:''}
+      </div>
+      ${sumHtml}
+      ${tags?`<div style="display:flex;gap:3px;margin-top:4px;flex-wrap:wrap;">${tags}</div>`:''}
+    </div>
+  </div>`;
+}
+
 function renderHome(){
   if(activeId) return;
   const today=new Date().toISOString().slice(0,10);
@@ -370,24 +420,9 @@ function renderHome(){
   if(!todayRecs.length){
     rows='<div style="padding:28px;text-align:center;color:#b0bcc8;font-size:13px;">아직 기록이 없습니다</div>';
   } else {
-    todayRecs.forEach(r=>{
-      const sc=[r.school,r.grade].filter(Boolean).join(' ');
-      const firstQ=r.qna&&r.qna[0]?r.qna[0].q:'';
-      const summary=(r.summary||firstQ).slice(0,50)+(r.summary&&r.summary.length>50?'…':firstQ.length>50?'…':'');
-      const tags=(r.tags||[]).slice(0,3).map(t=>`<span class="t-tag">${t}</span>`).join('');
-      rows+=`<div class="today-row" onclick="select('${r.id}')">
-        <div class="today-av" style="background:${avColor(r.student)}">${r.student[0]}</div>
-        <div style="flex:1;min-width:0;">
-          <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;">
-            <span style="font-size:13px;font-weight:700;">${r.student}</span>
-            ${sc?`<span style="font-size:11px;color:#9ca3af;">${sc}</span>`:''}
-            ${!isToday?`<span style="font-size:10.5px;color:#d1d5db;margin-left:auto;">${fmtDate(r.date)}</span>`:''}
-          </div>
-          ${summary?`<div style="font-size:12px;color:#4b5563;margin-top:2px;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${summary}</div>`:''}
-          ${tags?`<div style="display:flex;gap:3px;margin-top:4px;flex-wrap:wrap;">${tags}</div>`:''}
-        </div>
-      </div>`;
-    });
+    rows=todayRecs.map(r=>renderHomeRow(r,isToday)).join('');
+    // 캐시 없는 것들 백그라운드 요약
+    todayRecs.forEach(r=>{if(!summaryCache[r.id]) fetchAISummary(r);});
   }
 
   document.getElementById("detail").innerHTML=`
@@ -469,14 +504,27 @@ function updateSelBar(){
   else bar.classList.remove('show');
 }
 
-// ── DRAG SELECT ──
+// ── 선택 상태 DOM 동기화 (renderList 없이) ──
+function applySelectionToDOM(){
+  document.querySelectorAll('.sb-item[data-id]').forEach(item=>{
+    const id=item.dataset.id;
+    const sel=selectedIds.has(id);
+    item.classList.toggle('checked',sel);
+    const cb=item.querySelector('.cb');
+    if(cb) cb.checked=sel;
+  });
+  updateSelBar();
+}
+
+// ── DRAG SELECT: renderList 호출 없이 DOM만 조작 ──
 let isDragging=false,dragStartId=null;
 function startDragSelect(e,id){
   if(e.button!==0)return;
-  if(e.target.type==='checkbox')return; // 체크박스 클릭은 무시
+  if(e.target.type==='checkbox')return;
   isDragging=true;dragStartId=id;
   selectedIds.clear();selectedIds.add(id);
-  updateSelBar();renderList();e.preventDefault();
+  applySelectionToDOM();
+  e.preventDefault();
 }
 function continueDragSelect(id){
   if(!isDragging)return;
@@ -485,26 +533,20 @@ function continueDragSelect(id){
   const si=ids.indexOf(dragStartId),ei=ids.indexOf(id);
   if(si===-1||ei===-1)return;
   const[from,to]=si<ei?[si,ei]:[ei,si];
-  selectedIds.clear();ids.slice(from,to+1).forEach(i=>selectedIds.add(i));
-  updateSelBar();renderList();
+  selectedIds.clear();
+  ids.slice(from,to+1).forEach(i=>selectedIds.add(i));
+  applySelectionToDOM();
 }
 function endDragSelect(){isDragging=false;}
 document.addEventListener('mouseup',endDragSelect);
 
-// ────────────────────────────────────────────
+// ── CHECKBOX: DOM 직접 조작, select() 차단 ──
 function toggleSelect(e,id){
   e.stopPropagation();
   e.preventDefault();
   if(selectedIds.has(id)) selectedIds.delete(id);
   else selectedIds.add(id);
-  const item=document.querySelector(`.sb-item[data-id="${id}"]`);
-  if(item){
-    const cb=item.querySelector('.cb');
-    const isNowSelected=selectedIds.has(id);
-    if(cb) cb.checked=isNowSelected;
-    item.classList.toggle('checked',isNowSelected);
-  }
-  updateSelBar();
+  applySelectionToDOM();
 }
 
 async function deleteSelected(){
@@ -541,12 +583,11 @@ function renderList(){
       const sc=[r.school,r.grade].filter(Boolean).join(" ");
       const tags=(r.tags||[]).slice(0,3).map(t=>`<span class="sb-t">${t}</span>`).join("");
       const isChecked=selectedIds.has(r.id);
-      // ✅ sb-item onclick="select()" / checkbox onclick="toggleSelect()" - 이벤트 완전 분리
       h+=`<div class="sb-item ${r.id===activeId?"active":""} ${isChecked?"checked":""}" data-id="${r.id}"
         onclick="select('${r.id}')"
         onmousedown="startDragSelect(event,'${r.id}')"
-        onmouseover="continueDragSelect('${r.id}')">
-        <input type="checkbox" class="cb" ${isChecked?"checked":""} onclick="toggleSelect(event,'${r.id}')" />
+        onmouseenter="continueDragSelect('${r.id}')">
+        <input type="checkbox" class="cb" ${isChecked?"checked":""} onmousedown="toggleSelect(event,'${r.id}')" />
         <div class="av" style="background:${avColor(r.student)}">${r.student[0]}</div>
         <div style="min-width:0;">
           <div class="sb-nm">${r.student}</div>
