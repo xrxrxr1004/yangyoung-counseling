@@ -451,8 +451,7 @@ function renderHome(){
   const cache=dailySummaryCache[dateKey];
   const sumBlockContent=!hasRecs?''
     :cache&&!cache.loading
-      ?`<div id="daily-sum" style="font-size:13px;color:#374151;line-height:1.85;">${cache.text.replace(/
-/g,'<br>')}</div>`
+      ?`<div id="daily-sum" style="font-size:13px;color:#374151;line-height:1.85;">${cache.text.split('\n').join('<br>')}</div>`
       :`<div id="daily-sum" style="font-size:12.5px;color:#9ca3af;display:flex;align-items:center;gap:7px;"><span style="width:14px;height:14px;border:2px solid #e4e8f0;border-top-color:#2563eb;border-radius:50%;display:inline-block;animation:spin .8s linear infinite;flex-shrink:0;"></span>AI가 ${isToday?'오늘':dateLabel} 상담을 분석하고 있습니다...</div>`;
 
   const sumBlock=hasRecs?`
