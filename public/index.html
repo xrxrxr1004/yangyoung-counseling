@@ -355,44 +355,54 @@ function uid(){return"r"+Date.now().toString(36)+Math.random().toString(36).slic
 function toast(msg,type=""){const el=document.getElementById("toast");el.textContent=msg;el.className="toast show "+type;setTimeout(()=>el.className="toast",2800);}
 
 // ── AI 요약 캐시 (메모리, 새로고침 시 초기화) ──
-const summaryCache={};  // id → 요약 문자열
+// ── 오늘 전체 취합 요약 캐시 ──
+let dailySummaryCache={};  // date → {text, loading}
 
-async function fetchAISummary(r){
-  if(summaryCache[r.id]) return;
-  summaryCache[r.id]='loading';
-  const qna=(r.qna||[]).filter(qa=>qa.q||qa.a);
-  if(!qna.length){summaryCache[r.id]='(내용 없음)';updateSumEl(r.id);return;}
+async function fetchDailySummary(date, recs){
+  if(dailySummaryCache[date]) return;
+  dailySummaryCache[date]={loading:true, text:''};
+
+  // 전체 상담 내용 취합
+  const allContent=recs.map(r=>{
+    const qna=(r.qna||[]).filter(qa=>qa.q||qa.a)
+      .map(qa=>`  학생: ${qa.q}\n  선생님: ${qa.a||'(답변없음)'}`)
+      .join('\n');
+    return `[${r.student}]\n${qna}`;
+  }).join('\n\n');
+
+  if(!allContent.trim()){
+    dailySummaryCache[date]={loading:false,text:'(상담 내용 없음)'};
+    updateDailySumEl(date);
+    return;
+  }
+
   try{
     const res=await fetch('/api/summarize',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({qna})
+      body:JSON.stringify({daily:true, content:allContent, count:recs.length})
     });
     const data=await res.json();
-    summaryCache[r.id]=data.summary||'(요약 실패)';
-  }catch(e){summaryCache[r.id]='(요약 실패)';}
-  updateSumEl(r.id);
-}
-
-function updateSumEl(id){
-  if(activeId) return;
-  const el=document.getElementById('sum-'+id);
-  if(el){
-    const txt=summaryCache[id];
-    el.textContent=txt;
-    el.style.color=(txt==='(요약 실패)'||txt==='(내용 없음)')?'#d1d5db':'#374151';
-    el.style.fontSize='12px';
+    dailySummaryCache[date]={loading:false, text:data.summary||'(요약 실패)'};
+  }catch(e){
+    dailySummaryCache[date]={loading:false, text:'(요약 실패)'};
   }
+  updateDailySumEl(date);
 }
 
+function updateDailySumEl(date){
+  if(activeId) return;
+  const el=document.getElementById('daily-sum');
+  if(!el) return;
+  const cache=dailySummaryCache[date];
+  if(!cache||cache.loading) return;
+  el.innerHTML=cache.text.replace(/\n/g,'<br>');
+  el.style.color='#374151';
+}
 
 function renderHomeRow(r,isToday){
   const sc=[r.school,r.grade].filter(Boolean).join(' ');
   const tags=(r.tags||[]).slice(0,3).map(t=>`<span class="t-tag">${t}</span>`).join('');
-  const cached=summaryCache[r.id];
-  const sumHtml=cached&&cached!=='loading'
-    ?`<div id="sum-${r.id}" style="font-size:12px;color:#374151;margin-top:3px;line-height:1.5;">${cached}</div>`
-    :`<div id="sum-${r.id}" style="font-size:11.5px;color:#c4c9d4;margin-top:3px;">분석 중...</div>`;
   return `<div class="today-row" onclick="select('${r.id}')">
     <div class="today-av" style="background:${avColor(r.student)}">${r.student[0]}</div>
     <div style="flex:1;min-width:0;">
@@ -401,7 +411,6 @@ function renderHomeRow(r,isToday){
         ${sc?`<span style="font-size:11px;color:#9ca3af;">${sc}</span>`:''}
         ${!isToday?`<span style="font-size:10.5px;color:#d1d5db;margin-left:auto;">${fmtDate(r.date)}</span>`:''}
       </div>
-      ${sumHtml}
       ${tags?`<div style="display:flex;gap:3px;margin-top:4px;flex-wrap:wrap;">${tags}</div>`:''}
     </div>
   </div>`;
@@ -415,14 +424,27 @@ function renderHome(){
   if(!isToday) todayRecs=[...records].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,12);
 
   const sectionTitle=isToday?`오늘 상담 (${todayRecs.length}건)`:`최근 상담`;
+  const dateKey=isToday?today:(todayRecs[0]?.date||'');
+
+  // 취합 요약 블록
+  const cache=dailySummaryCache[dateKey];
+  const sumBlockContent=!todayRecs.length?''
+    :cache&&!cache.loading
+      ?`<div id="daily-sum" style="font-size:13px;color:#374151;line-height:1.85;">${cache.text.replace(/\n/g,'<br>')}</div>`
+      :`<div id="daily-sum" style="font-size:12.5px;color:#9ca3af;display:flex;align-items:center;gap:7px;"><span style="width:14px;height:14px;border:2px solid #e4e8f0;border-top-color:#2563eb;border-radius:50%;display:inline-block;animation:spin .8s linear infinite;flex-shrink:0;"></span>AI가 오늘 상담을 분석하고 있습니다...</div>`;
+
+  const sumBlock=isToday&&todayRecs.length?`
+    <div style="background:#f0f6ff;border:1px solid #c7d9f8;border-radius:12px;padding:14px 16px;margin-bottom:16px;">
+      <div style="font-size:11px;font-weight:700;color:#2563eb;letter-spacing:.5px;margin-bottom:8px;">📊 오늘 상담 요약</div>
+      ${sumBlockContent}
+    </div>`:'';
 
   let rows='';
   if(!todayRecs.length){
     rows='<div style="padding:28px;text-align:center;color:#b0bcc8;font-size:13px;">아직 기록이 없습니다</div>';
   } else {
     rows=todayRecs.map(r=>renderHomeRow(r,isToday)).join('');
-    // 캐시 없는 것들 백그라운드 요약
-    todayRecs.forEach(r=>{if(!summaryCache[r.id]) fetchAISummary(r);});
+    if(isToday&&!dailySummaryCache[dateKey]) fetchDailySummary(dateKey, todayRecs);
   }
 
   document.getElementById("detail").innerHTML=`
@@ -437,6 +459,7 @@ function renderHome(){
           <span style="color:#9ca3af;font-size:11px;">더 빠르고 정확</span>
         </div>
       </div>
+      ${sumBlock}
       <div class="today-panel">
         <div class="today-head">
           <span style="font-size:13.5px;font-weight:700;color:#1e40af;">📋 ${sectionTitle}</span>
