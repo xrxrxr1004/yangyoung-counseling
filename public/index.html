@@ -183,7 +183,7 @@ body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:#f0
   <div class="stat" id="statEl" style="margin-left:8px"></div>
   <button class="btn btn-ghost" onclick="openStudentMgr()">👥 학생 관리</button>
   <button class="btn btn-ghost" onclick="openManual(null)">✏️ 직접 입력</button>
-  <input type="file" id="fileIn" accept="image/*" multiple style="display:none;" onchange="handleFiles(this.files)">
+  <input type="file" id="fileIn" accept="image/*,.csv" multiple style="display:none;" onchange="handleDrop(this.files)">
 </div>
 
 <div class="main">
@@ -205,17 +205,25 @@ body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:#f0
   <div class="detail" id="detail"
     ondragover="event.preventDefault();this.classList.add('drag-over')"
     ondragleave="this.classList.remove('drag-over')"
-    ondrop="event.preventDefault();this.classList.remove('drag-over');handleFiles(event.dataTransfer.files)">
+    ondrop="event.preventDefault();this.classList.remove('drag-over');handleDrop(event.dataTransfer.files)">
     <div class="empty">
-      <div class="empty-icon">🖼️</div>
-      <p style="font-weight:700;font-size:16px;color:#1e40af;">카카오톡 대화 스크린샷을<br>여기에 끌어다 놓으세요</p>
-      <div class="hint-box" style="border:2.5px dashed #3b82f6;background:#eff6ff;padding:20px 24px;border-radius:14px;margin-top:12px;">
-        🖱️ <strong>드래그앤드롭</strong>으로 사진을 올리면<br>
-        AI가 자동으로 상담 기록을 추가해요<br><br>
-        📁 여러 장을 한 번에 올릴 수 있어요<br><br>
-        💾 모든 기록은 서버에 저장되어<br>
-        <strong>모든 선생님이 공유</strong>합니다
+      <div class="empty-icon">💬</div>
+      <p style="font-weight:700;font-size:16px;color:#1e40af;">카카오톡 대화를 여기에 끌어다 놓으세요</p>
+      <div style="display:flex;gap:14px;margin-top:16px;max-width:460px;">
+        <div class="hint-box" style="flex:1;border:2.5px dashed #3b82f6;background:#eff6ff;padding:16px;border-radius:14px;font-size:12px;line-height:1.8;">
+          🖼️ <strong>스크린샷</strong><br>
+          이미지 파일(.jpg/.png)<br>
+          여러 장 한 번에 가능<br>
+          <span style="color:#9ca3af;font-size:11px;">AI가 OCR로 분석</span>
+        </div>
+        <div class="hint-box" style="flex:1;border:2.5px dashed #10b981;background:#ecfdf5;padding:16px;border-radius:14px;font-size:12px;line-height:1.8;">
+          📄 <strong>카카오 CSV</strong><br>
+          대화 내보내기 파일<br>
+          기간 선택 후 분석<br>
+          <span style="color:#9ca3af;font-size:11px;">더 빠르고 정확</span>
+        </div>
       </div>
+      <p style="font-size:11px;color:#9ca3af;margin-top:10px;">💾 모든 기록은 서버에 저장되어 모든 선생님이 공유합니다</p>
     </div>
   </div>
 </div>
@@ -239,6 +247,36 @@ body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:#f0
     <div class="modal-foot">
       <button class="btn-cancel" onclick="closeModal()">취소</button>
       <button class="btn-save" id="saveBtn">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 카카오 CSV 분석 모달 -->
+<div class="modal-bg" id="csvAnalBg" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:100;align-items:center;justify-content:center;backdrop-filter:blur(3px);">
+  <div style="background:#fff;border-radius:16px;width:520px;max-width:95vw;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+    <div class="modal-head">
+      <div class="modal-title">📄 카카오 CSV 일괄 분석</div>
+      <button class="modal-close" onclick="closeCsvAnal()">✕</button>
+    </div>
+    <div style="padding:18px 22px;">
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px 14px;font-size:12px;color:#166534;margin-bottom:16px;line-height:1.7;">
+        📱 카카오톡 PC → 대화방 → 우상단 <strong>≡</strong> → <strong>대화 내보내기</strong> → CSV<br>
+        <span style="color:#6b7280;">파일명에 학생 이름이 포함되면 자동 감지됩니다 (예: 진학학원_윤정.csv)</span>
+      </div>
+      <div style="font-size:12.5px;font-weight:600;color:#374151;margin-bottom:8px;">분석할 파일 <span id="csvFileCount" style="font-weight:400;color:#9ca3af;"></span></div>
+      <div id="csvFileList" style="background:#f8f9fc;border-radius:8px;padding:2px 0;margin-bottom:16px;max-height:180px;overflow-y:auto;"></div>
+      <div style="font-size:12.5px;font-weight:600;color:#374151;margin-bottom:6px;">분석 기간 <span style="font-weight:400;color:#9ca3af;">(전체 파일에 공통 적용)</span></div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+        <input type="date" id="csvDateFrom" class="f-input" style="flex:1;">
+        <span style="color:#9ca3af;">~</span>
+        <input type="date" id="csvDateTo" class="f-input" style="flex:1;">
+      </div>
+      <div id="csvDateInfo" style="font-size:11.5px;color:#9ca3af;margin-bottom:4px;"></div>
+      <div style="font-size:11px;color:#3b82f6;margin-bottom:16px;">※ 기간 미설정 시 전체 기간 분석</div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-cancel" onclick="closeCsvAnal()">취소</button>
+      <button class="btn-save" onclick="runCsvAnal()">🤖 AI 분석 시작</button>
     </div>
   </div>
 </div>
@@ -932,8 +970,205 @@ function enrichWithStudent(rec) {
   return rec;
 }
 
+
+// ── KAKAO CSV ANALYSIS ──
+let csvAnalFiles = []; // [{ file, rows, studentName, minDate, maxDate }]
+
+function handleDrop(files) {
+  if (!files.length) return;
+  const arr = Array.from(files);
+  const csvFiles = arr.filter(f => f.name.toLowerCase().endsWith('.csv'));
+  const imgFiles = arr.filter(f => !f.name.toLowerCase().endsWith('.csv'));
+  if (imgFiles.length) handleFiles(imgFiles);
+  if (csvFiles.length) openCsvAnal(csvFiles);
+}
+
+function guessStudentFromFilename(filename) {
+  // "진학학원_윤정.csv" → "윤정" / "학원_홍길동_2025.csv" → "홍길동"
+  const base = filename.replace(/\.csv$/i, '');
+  const parts = base.split(/[_\-\s]+/);
+  const exclude = ['학원','진학','양영','카카오','대화','채팅','톡'];
+  return parts.find(p => p.length >= 2 && !exclude.some(e => p.includes(e))) || '';
+}
+
+function parseCsvKakao(text) {
+  const rows = [];
+  // 멀티라인 따옴표 처리가 필요한 CSV 파서
+  let i = 1; // 헤더 건너뜀
+  const lines = text.trim().split(/\r?\n/);
+  for (; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line.trim()) continue;
+    const firstComma = line.indexOf(',');
+    const secondComma = line.indexOf(',', firstComma + 1);
+    if (firstComma === -1 || secondComma === -1) continue;
+    const date = line.slice(0, firstComma).trim().replace(/^"+|"+$/g,'');
+    const user = line.slice(firstComma+1, secondComma).trim().replace(/^"+|"+$/g,'');
+    let msg = line.slice(secondComma+1).trim().replace(/^"+|"+$/g,'').replace(/""/g, '"');
+    // 빈 메시지, 시스템 메시지, 파일명만 있는 것 제외
+    if (!date.match(/\d{4}-\d{2}-\d{2}/) || !user || msg === '사진' || msg === '동영상') continue;
+    rows.push({ date, user, msg });
+  }
+  return rows;
+}
+
+function openCsvAnal(files) {
+  csvAnalFiles = [];
+  let loaded = 0;
+  const total = files.length;
+
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const rows = parseCsvKakao(e.target.result);
+      const studentName = guessStudentFromFilename(file.name);
+      const dates = rows.map(r => r.date.slice(0,10)).sort();
+      csvAnalFiles.push({
+        file, rows,
+        studentName,
+        minDate: dates[0] || '',
+        maxDate: dates[dates.length-1] || ''
+      });
+      loaded++;
+      if (loaded === total) showCsvModal();
+    };
+    reader.readAsText(file, 'UTF-8');
+  });
+}
+
+function showCsvModal() {
+  if (!csvAnalFiles.length) { toast('유효한 CSV 파일이 없습니다.', 'err'); return; }
+
+  // 전체 날짜 범위
+  const allMin = csvAnalFiles.map(f => f.minDate).filter(Boolean).sort()[0] || '';
+  const allMax = csvAnalFiles.map(f => f.maxDate).filter(Boolean).sort().reverse()[0] || '';
+
+  // 파일 목록 렌더
+  document.getElementById('csvFileCount').textContent = `(${csvAnalFiles.length}개)`;
+  const listEl = document.getElementById('csvFileList');
+  listEl.innerHTML = csvAnalFiles.map((f, i) => `
+    <div style="display:flex;align-items:center;padding:8px 12px;border-bottom:1px solid #f1f5f9;gap:8px;">
+      <span style="font-size:12px;color:#374151;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+        📄 ${f.file.name}
+      </span>
+      <span style="font-size:11px;color:#9ca3af;white-space:nowrap;">${f.rows.length}개</span>
+      <input type="text" value="${f.studentName}" placeholder="학생 이름"
+        style="border:1px solid #e4e8f0;border-radius:6px;padding:3px 8px;font-size:12px;width:80px;"
+        onchange="csvAnalFiles[${i}].studentName=this.value.trim()" />
+    </div>`).join('');
+
+  document.getElementById('csvDateFrom').value = allMin;
+  document.getElementById('csvDateTo').value = allMax;
+  updateCsvDateInfo();
+  document.getElementById('csvAnalBg').style.display = 'flex';
+}
+
+function updateCsvDateInfo() {
+  const from = document.getElementById('csvDateFrom').value;
+  const to = document.getElementById('csvDateTo').value;
+  if (!from && !to) {
+    document.getElementById('csvDateInfo').textContent = '기간 미설정 시 전체 대화 분석';
+    return;
+  }
+  const total = csvAnalFiles.reduce((sum, f) => {
+    return sum + f.rows.filter(r => {
+      const d = r.date.slice(0,10);
+      return (!from || d >= from) && (!to || d <= to);
+    }).length;
+  }, 0);
+  const days = new Set(csvAnalFiles.flatMap(f =>
+    f.rows.filter(r => {
+      const d = r.date.slice(0,10);
+      return (!from || d >= from) && (!to || d <= to);
+    }).map(r => r.date.slice(0,10))
+  )).size;
+  document.getElementById('csvDateInfo').textContent = `총 ${total}개 메시지 · ${days}일치 분석 예정`;
+}
+document.addEventListener('DOMContentLoaded', () => {
+  ['csvDateFrom','csvDateTo'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', updateCsvDateInfo);
+  });
+});
+
+function closeCsvAnal() {
+  document.getElementById('csvAnalBg').style.display = 'none';
+  csvAnalFiles = [];
+}
+
+async function runCsvAnal() {
+  const from = document.getElementById('csvDateFrom').value;
+  const to = document.getElementById('csvDateTo').value;
+
+  // 이름 없는 파일 검사
+  const unnamed = csvAnalFiles.filter(f => !f.studentName);
+  if (unnamed.length) {
+    toast(`학생 이름을 입력해주세요: ${unnamed.map(f=>f.file.name).join(', ')}`, 'err');
+    return;
+  }
+
+  closeCsvAnal();
+
+  // 전체 파일 × 날짜별 작업 목록 생성
+  const tasks = [];
+  for (const fileData of csvAnalFiles) {
+    const filtered = fileData.rows.filter(r => {
+      const d = r.date.slice(0,10);
+      return (!from || d >= from) && (!to || d <= to);
+    });
+    const byDate = {};
+    filtered.forEach(r => {
+      const d = r.date.slice(0,10);
+      if (!byDate[d]) byDate[d] = [];
+      byDate[d].push(r);
+    });
+    Object.entries(byDate).sort().forEach(([date, rows]) => {
+      tasks.push({ date, rows, studentName: fileData.studentName });
+    });
+  }
+
+  if (!tasks.length) { toast('분석할 메시지가 없습니다.', 'err'); return; }
+
+  let ok = 0, skip = 0, fail = 0;
+
+  for (let i = 0; i < tasks.length; i++) {
+    const { date, rows, studentName } = tasks[i];
+    const convText = rows.map(r => `${r.user}: ${r.msg}`).join('\n');
+
+    document.getElementById('overlayStep').textContent =
+      `(${i+1}/${tasks.length}) ${studentName} · ${date} 분석 중...`;
+    document.getElementById('overlay').classList.add('show');
+
+    try {
+      const res = await api('parse-csv', 'POST', { text: convText, date, studentName });
+      let rec = Array.isArray(res.data) ? res.data[0] : res.data;
+      if (!rec || !rec.student) { skip++; continue; }
+      if (!rec.qna || rec.qna.length === 0) { skip++; continue; } // 상담 내용 없는 날 건너뜀
+      rec = enrichWithStudent(rec);
+
+      const existing = records.find(r => r.student === rec.student && r.date === rec.date);
+      if (existing) {
+        existing.qna = [...(existing.qna||[]), ...(rec.qna||[])];
+        existing.tags = [...new Set([...(existing.tags||[]), ...(rec.tags||[])])];
+        await api('record', 'PUT', existing);
+      } else {
+        await api('record', 'POST', rec);
+        records.unshift(rec);
+      }
+      ok++;
+    } catch(e) {
+      fail++;
+      console.error(date, e.message);
+    }
+  }
+
+  document.getElementById('overlay').classList.remove('show');
+  renderFilters(); renderList(); renderCal();
+  toast(`✅ ${ok}건 저장 완료${skip ? ` · ${skip}건 건너뜀` : ''}${fail ? ` · ${fail}건 실패` : ''}`);
+}
+
 // ── KEYBOARD ──
-document.addEventListener("keydown", e=>{ if(e.key==="Escape"){ document.getElementById("lb").classList.remove("show"); closeModal(); closeConfirm(); closeStudentMgr(); } });
+document.addEventListener("keydown", e=>{ if(e.key==="Escape"){ document.getElementById("lb").classList.remove("show"); closeModal(); closeConfirm(); closeStudentMgr(); closeCsvAnal(); } });
 document.getElementById("modalBg").addEventListener("click", e=>{ if(e.target===document.getElementById("modalBg")) closeModal(); });
 
 // ── POLLING: auto-refresh every 30s ──
