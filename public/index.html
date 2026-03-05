@@ -382,10 +382,17 @@ async function fetchDailySummary(date, recs){
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({daily:true, content:allContent, count:recs.length})
     });
-    const data=await res.json();
-    dailySummaryCache[date]={loading:false, text:data.summary||'(요약 실패)'};
+    if(!res.ok){
+      const err=await res.text();
+      console.error('summarize HTTP',res.status,err);
+      dailySummaryCache[date]={loading:false, text:'(요약 실패: '+res.status+')'};
+    } else {
+      const data=await res.json();
+      dailySummaryCache[date]={loading:false, text:data.summary||'(응답 없음)'};
+    }
   }catch(e){
-    dailySummaryCache[date]={loading:false, text:'(요약 실패)'};
+    console.error('summarize fetch error:',e);
+    dailySummaryCache[date]={loading:false, text:'(요약 실패: '+e.message+')'};
   }
   updateDailySumEl(date);
 }
@@ -419,32 +426,47 @@ function renderHomeRow(r,isToday){
 function renderHome(){
   if(activeId) return;
   const today=new Date().toISOString().slice(0,10);
-  let todayRecs=records.filter(r=>r.date===today).sort((a,b)=>a.student.localeCompare(b.student));
-  const isToday=todayRecs.length>0;
-  if(!isToday) todayRecs=[...records].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,12);
+  // ✅ dateFilter 있으면 그 날짜 기준, 없으면 오늘
+  const targetDate=dateFilter||today;
+  const isToday=targetDate===today;
 
-  const sectionTitle=isToday?`오늘 상담 (${todayRecs.length}건)`:`최근 상담`;
-  const dateKey=isToday?today:(todayRecs[0]?.date||'');
+  let recs=records.filter(r=>r.date===targetDate).sort((a,b)=>a.student.localeCompare(b.student));
+  const hasRecs=recs.length>0;
 
-  // 취합 요약 블록
+  // 선택한 날짜에 기록 없으면 → 오늘 없으면 최근 상담
+  let fallback=false;
+  if(!hasRecs){
+    fallback=true;
+    recs=[...records].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,12);
+  }
+
+  const dateLabel=isToday?'오늘':(targetDate?`${parseInt(targetDate.slice(5,7))}월 ${parseInt(targetDate.slice(8,10))}일`:'');
+  const sectionTitle=hasRecs
+    ?(isToday?`오늘 상담 (${recs.length}건)`:`${dateLabel} 상담 (${recs.length}건)`)
+    :'최근 상담';
+
+  const dateKey=hasRecs?targetDate:(recs[0]?.date||'');
+
+  // 취합 요약 블록 (기록 있는 날만)
   const cache=dailySummaryCache[dateKey];
-  const sumBlockContent=!todayRecs.length?''
+  const sumBlockContent=!hasRecs?''
     :cache&&!cache.loading
-      ?`<div id="daily-sum" style="font-size:13px;color:#374151;line-height:1.85;">${cache.text.replace(/\n/g,'<br>')}</div>`
-      :`<div id="daily-sum" style="font-size:12.5px;color:#9ca3af;display:flex;align-items:center;gap:7px;"><span style="width:14px;height:14px;border:2px solid #e4e8f0;border-top-color:#2563eb;border-radius:50%;display:inline-block;animation:spin .8s linear infinite;flex-shrink:0;"></span>AI가 오늘 상담을 분석하고 있습니다...</div>`;
+      ?`<div id="daily-sum" style="font-size:13px;color:#374151;line-height:1.85;">${cache.text.replace(/
+/g,'<br>')}</div>`
+      :`<div id="daily-sum" style="font-size:12.5px;color:#9ca3af;display:flex;align-items:center;gap:7px;"><span style="width:14px;height:14px;border:2px solid #e4e8f0;border-top-color:#2563eb;border-radius:50%;display:inline-block;animation:spin .8s linear infinite;flex-shrink:0;"></span>AI가 ${isToday?'오늘':dateLabel} 상담을 분석하고 있습니다...</div>`;
 
-  const sumBlock=isToday&&todayRecs.length?`
+  const sumBlock=hasRecs?`
     <div style="background:#f0f6ff;border:1px solid #c7d9f8;border-radius:12px;padding:14px 16px;margin-bottom:16px;">
-      <div style="font-size:11px;font-weight:700;color:#2563eb;letter-spacing:.5px;margin-bottom:8px;">📊 오늘 상담 요약</div>
+      <div style="font-size:11px;font-weight:700;color:#2563eb;letter-spacing:.5px;margin-bottom:8px;">📊 ${isToday?'오늘':dateLabel} 상담 요약</div>
       ${sumBlockContent}
     </div>`:'';
 
   let rows='';
-  if(!todayRecs.length){
+  if(!recs.length){
     rows='<div style="padding:28px;text-align:center;color:#b0bcc8;font-size:13px;">아직 기록이 없습니다</div>';
   } else {
-    rows=todayRecs.map(r=>renderHomeRow(r,isToday)).join('');
-    if(isToday&&!dailySummaryCache[dateKey]) fetchDailySummary(dateKey, todayRecs);
+    rows=recs.map(r=>renderHomeRow(r,!fallback)).join('');
+    if(hasRecs&&!dailySummaryCache[dateKey]) fetchDailySummary(dateKey,recs);
   }
 
   document.getElementById("detail").innerHTML=`
@@ -506,7 +528,7 @@ function renderCal(){
   document.getElementById('calWrap').innerHTML=h;
 }
 function moveCal(dir){calMonth+=dir;if(calMonth<0){calMonth=11;calYear--;}if(calMonth>11){calMonth=0;calYear++;}renderCal();}
-function setDateFilter(date){dateFilter=dateFilter===date?null:date;renderCal();renderList();}
+function setDateFilter(date){dateFilter=dateFilter===date?null:date;renderCal();renderList();if(!activeId)renderHome();}
 
 // ── DELETE ALL ──
 async function deleteAll(){
