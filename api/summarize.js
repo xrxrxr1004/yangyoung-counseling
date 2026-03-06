@@ -18,7 +18,7 @@ export default async function handler(req, res) {
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-3-5-haiku-20241022",
+        model: "claude-haiku-4-5-20251001",
         max_tokens: 300,
         system: `당신은 학원 선생님들의 업무 보조 AI입니다.
 학생들과의 상담 내용 전체를 읽고, 선생님들이 한눈에 볼 수 있도록 요약해주세요.
