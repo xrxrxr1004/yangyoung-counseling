@@ -9,5 +9,5 @@ export default async function handler(req, res) {
   });
   const j = await r.json();
   const records = j.result ? JSON.parse(j.result) : [];
-  return res.status(200).json(records);
+  return res.status(200).json({ data: records });
 }
