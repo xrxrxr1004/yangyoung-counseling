@@ -165,7 +165,7 @@ body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:#f0
 .t-tag{background:#dbeafe;color:#1e40af;border-radius:10px;padding:1px 7px;font-size:10px;font-weight:600;}
 
 /* ── AI 채팅 패널 ── */
-.chat-panel{position:fixed;right:0;top:0;height:100vh;width:380px;background:#fff;border-left:1px solid #e4e8f0;box-shadow:-4px 0 20px rgba(0,0,0,.1);display:flex;flex-direction:column;z-index:150;transform:translateX(100%);transition:transform .25s cubic-bezier(.4,0,.2,1);}
+.chat-panel{position:fixed;right:0;top:0;height:100vh;width:420px;background:#fff;border-left:1px solid #e4e8f0;box-shadow:-4px 0 20px rgba(0,0,0,.1);display:flex;flex-direction:column;z-index:150;transform:translateX(100%);transition:transform .25s cubic-bezier(.4,0,.2,1);}
 .chat-panel.open{transform:translateX(0);}
 .chat-head{padding:14px 16px;border-bottom:1px solid #e4e8f0;display:flex;align-items:center;justify-content:space-between;background:#1e40af;flex-shrink:0;}
 .chat-head-info{flex:1;}
@@ -185,9 +185,18 @@ body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:#f0
 .chat-foot{padding:10px 12px;border-top:1px solid #e4e8f0;display:flex;gap:8px;flex-shrink:0;background:#fff;}
 .chat-input{flex:1;border:1.5px solid #e4e8f0;border-radius:10px;padding:8px 12px;font-size:13px;outline:none;font-family:inherit;resize:none;height:40px;line-height:1.5;transition:border-color .12s;overflow:hidden;}
 .chat-input:focus{border-color:#2563eb;}
-.chat-send{background:#2563eb;border:none;border-radius:10px;width:40px;height:40px;cursor:pointer;color:#fff;font-size:16px;flex-shrink:0;}
-.chat-send:hover{background:#1d4ed8;}
-.chat-send:disabled{background:#e4e8f0;color:#9ca3af;cursor:not-allowed;}
+.chat-send{display:none;}
+.chat-actions{display:flex;gap:6px;width:100%;}
+.btn-copy{flex:1;background:#2563eb;border:none;border-radius:10px;padding:0 14px;height:40px;cursor:pointer;color:#fff;font-size:13px;font-weight:700;font-family:inherit;transition:background .12s;white-space:nowrap;}
+.btn-copy:hover{background:#1d4ed8;}
+.btn-copy.copied{background:#059669;}
+.btn-open{flex:1;background:#f0f6ff;border:1.5px solid #bfdbfe;border-radius:10px;padding:0 14px;height:40px;cursor:pointer;color:#1d4ed8;font-size:13px;font-weight:700;font-family:inherit;transition:all .12s;white-space:nowrap;}
+.btn-open:hover{background:#dbeafe;}
+.prompt-preview{background:#f8fafc;border:1px solid #e4e8f0;border-radius:10px;padding:10px 13px;font-size:11.5px;color:#64748b;line-height:1.6;max-height:140px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;}
+.mode-info{font-size:11px;padding:5px 14px 0;color:#64748b;display:flex;align-items:center;gap:5px;}
+.mode-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.mode-dot.a{background:#10b981;}
+.mode-dot.b{background:#2563eb;}
 .btn-chat{background:#2563eb;color:#fff;border:none;}
 .btn-chat:hover{background:#1d4ed8;}
 .chat-mode-badge{font-size:10px;padding:2px 8px;border-radius:8px;font-weight:700;margin-top:4px;display:inline-block;}
@@ -438,16 +447,20 @@ async function fetchDailySummary(date, recs){
     return;
   }
 
+  // 너무 긴 경우 4000자로 자르기 (토큰 초과 방지)
+  const trimmedContent = allContent.length > 4000 ? allContent.slice(0, 4000) + '\n...(이하 생략)' : allContent;
+
   try{
     const res=await fetch('/api/summarize',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({daily:true, content:allContent, count:recs.length})
+      body:JSON.stringify({daily:true, content:trimmedContent, count:recs.length})
     });
     if(!res.ok){
-      const err=await res.text();
-      console.error('summarize HTTP',res.status,err);
-      dailySummaryCache[date]={loading:false, text:'(요약 실패: '+res.status+')'};
+      let errDetail='';
+      try{ const ej=await res.json(); errDetail=ej.detail||ej.error||''; console.error('summarize HTTP',res.status,ej); }
+      catch(){ const et=await res.text(); errDetail=et; console.error('summarize HTTP',res.status,et); }
+      dailySummaryCache[date]={loading:false, text:'(요약 실패: '+res.status+(errDetail?' — '+errDetail.slice(0,120):'')+')' };
     } else {
       const data=await res.json();
       dailySummaryCache[date]={loading:false, text:data.summary||'(응답 없음)'};
@@ -897,7 +910,7 @@ function handleDrop(files){
   if(imgFiles.length)handleFiles(imgFiles);
   if(csvFiles.length)openCsvAnal(csvFiles);
 }
-function guessStudentFromFilename(filename){const base=filename.replace(/\.csv$/i,'');const parts=base.split(/[_\-\s]+/);const excl=['학원','진학','양영','카카오','대화','채팅','톡'];return parts.find(p=>p.length>=2&&!excl.some(e=>p.includes(e)))||'';}
+function guessStudentFromFilename(filename){const base=filename.replace(/\.csv$/i,'');const parts=base.split(/[_\-\s]+/);const excl=['학원','진학','양영','카카오','대화','채팅','톡'];return parts.find(p=>p.length>=2&&!/^\d+$/.test(p)&&!/^\(\d+\)$/.test(p)&&!excl.some(e=>p.includes(e)))||'';}
 function parseCsvKakao(text){
   const rows=[],lines=text.trim().split(/\r?\n/);
   for(let i=1;i<lines.length;i++){const line=lines[i];if(!line.trim())continue;const fc=line.indexOf(','),sc=line.indexOf(',',fc+1);if(fc===-1||sc===-1)continue;const date=line.slice(0,fc).trim().replace(/^"+|"+$/g,'');const user=line.slice(fc+1,sc).trim().replace(/^"+|"+$/g,'');let msg=line.slice(sc+1).trim().replace(/^"+|"+$/g,'').replace(/""/g,'"');if(!date.match(/\d{4}-\d{2}-\d{2}/)||!user||msg==='사진'||msg==='동영상')continue;rows.push({date,user,msg});}
@@ -1006,85 +1019,153 @@ function detectStudentNames(query){
   return names.filter(n => query.includes(n));
 }
 
-// A방식: 전체 요약 컨텍스트 (태그+요약 기반)
+// 학생 기본정보 한 줄 요약
+function studentInfo(name){
+  const s = students.find(s=>s.name===name);
+  if(!s) return '';
+  const grade = calcGradeClient(s.admissionYear);
+  const parts = [];
+  if(s.school) parts.push(s.school);
+  if(grade) parts.push(grade+'학년');
+  if(s.textbook) parts.push('교재:'+s.textbook);
+  if(s.supplementary) parts.push('부교재:'+s.supplementary);
+  return parts.join(' / ');
+}
+
+// A방식: 전체 요약 컨텍스트 (학생정보 + 태그 + 요약)
 function buildContextA(){
   const byStudent = {};
   records.forEach(r => {
-    if(!byStudent[r.student]) byStudent[r.student] = {tags:[], summaries:[], dates:[]};
+    if(!byStudent[r.student]) byStudent[r.student] = {tags:[], summaries:[], dates:[], cnt:0};
     byStudent[r.student].tags.push(...(r.tags||[]));
     if(r.summary) byStudent[r.student].summaries.push(r.summary);
     byStudent[r.student].dates.push(r.date);
+    byStudent[r.student].cnt++;
   });
   const lines = Object.entries(byStudent).map(([name, d]) => {
+    const info = studentInfo(name);
     const tags = [...new Set(d.tags)].join(', ');
     const latest = d.dates.sort().reverse()[0];
     const summ = d.summaries.slice(-2).join(' / ');
-    return `[${name}] 최근상담:${latest} 태그:${tags||'없음'} 요약:${summ||'없음'}`;
+    return '['+name+']'+(info?' ('+info+')':'')+' 상담'+d.cnt+'건 최근:'+latest+' 태그:'+(tags||'없음')+' 요약:'+(summ||'없음');
   });
   return lines.join('\n');
 }
 
-// B방식: 특정 학생 전체 기록
+// B방식: 특정 학생 전체 기록 + 학생 기본정보
 function buildContextB(names){
   const sep = String.fromCharCode(10);
+  // 학생 기본정보 헤더
+  const infoHeader = names.map(name => {
+    const s = students.find(s=>s.name===name);
+    if(!s) return '['+name+'] 학생DB 정보 없음';
+    const grade = calcGradeClient(s.admissionYear);
+    return '['+name+' 기본정보] 학교:'+(s.school||'미등록')
+      +' / 학년:'+(grade?grade+'학년':'미상')
+      +' / 교재:'+(s.textbook||'미등록')
+      +' / 부교재:'+(s.supplementary||'없음');
+  }).join(sep);
+
   const matched = records.filter(r => names.includes(r.student));
-  return matched.map(r => {
+  const recText = matched.map(r => {
     const qnas = (r.qna||[]).map(q=>'  Q: '+(q.q||'')+sep+'  A: '+(q.a||'')).join(sep);
-    return '['+r.student+' / '+r.date+' / '+(r.school||'')+' '+(r.grade||'')+']'+sep+qnas+sep+'태그: '+(r.tags||[]).join(', ');
+    return '['+r.student+' / '+r.date+']'+sep+qnas+sep+'태그: '+(r.tags||[]).join(', ');
   }).join(sep+sep);
+
+  return infoHeader + sep + sep + '--- 상담 기록 ---' + sep + recText;
 }
 
-async function sendChat(){
-  const input = document.getElementById('chatInput');
-  const sendBtn = document.getElementById('chatSendBtn');
-  const query = input.value.trim();
-  if(!query || sendBtn.disabled) return;
+let currentPrompt = '';
 
-  input.value = '';
-  input.style.height = '40px';
-  appendMsg('user', query);
-  chatHistory.push({role:'user', content: query});
+function setHint(el){
+  document.getElementById('chatInput').value = el.textContent;
+  onQueryInput(el.textContent);
+}
 
-  // 로딩 표시
-  const loadDiv = appendMsg('loading', '생각하는 중...');
-  sendBtn.disabled = true;
+// sendChat은 이제 쓰지 않지만 호환성 유지
+function sendChat(){ copyPrompt(); }
 
-  // 학생 이름 감지
+function onQueryInput(query){
+  query = query.trim();
+  const btnCopy = document.getElementById('btnCopy');
+  const btnOpen = document.getElementById('btnOpen');
+  const preview = document.getElementById('promptPreview');
+  const modeInfo = document.getElementById('modeInfo');
+  const modeDot = document.getElementById('modeDot');
+  const modeText = document.getElementById('modeText');
+
+  if(!query){
+    btnCopy.disabled = true;
+    btnOpen.disabled = true;
+    preview.style.display = 'none';
+    modeInfo.style.display = 'none';
+    currentPrompt = '';
+    return;
+  }
+
   const detected = detectStudentNames(query);
-  let context, modeLabel;
+  let context, modeLabel, isDotB;
 
   if(detected.length > 0){
     context = buildContextB(detected);
-    modeLabel = `📋 상세모드: ${detected.join(', ')} 기록 ${records.filter(r=>detected.includes(r.student)).length}건 참조`;
+    const cnt = records.filter(r=>detected.includes(r.student)).length;
+    modeLabel = '상세모드 — ' + detected.join(', ') + ' 기록 ' + cnt + '건 참조';
+    isDotB = true;
   } else {
     context = buildContextA();
-    modeLabel = `📊 요약모드: 전체 ${[...new Set(records.map(r=>r.student))].length}명 요약 참조`;
+    const studentCnt = [...new Set(records.map(r=>r.student))].length;
+    modeLabel = '요약모드 — 전체 ' + studentCnt + '명 요약 참조';
+    isDotB = false;
   }
 
-  try {
-    const res = await fetch('/api/chat', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({
-        query,
-        context,
-        mode: detected.length > 0 ? 'B' : 'A',
-        history: chatHistory.slice(-6) // 최근 6턴만
-      })
-    });
-    const data = await res.json();
-    loadDiv.remove();
+  // 프롬프트 조립
+  const systemMsg = detected.length > 0
+    ? '당신은 양영학원 상담 기록 분석 도우미입니다. 아래 상담 기록을 바탕으로 질문에 정확하게 답하세요. 날짜, Q&A 내용, 태그를 적극 활용하고, 한국어로 핵심만 간결하게 답하세요.'
+    : '당신은 양영학원 상담 기록 분석 도우미입니다. 아래 전체 학생 요약 데이터를 바탕으로 질문에 답하세요. 한국어로 핵심만 간결하게 답하세요.';
 
-    const answer = data.answer || '응답을 받지 못했습니다.';
-    appendMsg('ai', answer, modeLabel);
-    chatHistory.push({role:'assistant', content: answer});
+  currentPrompt = systemMsg + '\n\n--- 상담 데이터 ---\n' + context + '\n--- 끝 ---\n\n질문: ' + query;
 
-  } catch(e) {
-    loadDiv.remove();
-    appendMsg('ai', '오류가 발생했습니다: ' + e.message);
+  // 미리보기 (앞 200자)
+  preview.textContent = currentPrompt.slice(0, 250) + (currentPrompt.length > 250 ? '...' : '');
+  preview.style.display = 'block';
+
+  // 모드 표시
+  modeDot.className = 'mode-dot ' + (isDotB ? 'b' : 'a');
+  modeText.textContent = modeLabel + ' · 총 ' + currentPrompt.length.toLocaleString() + '자';
+  modeInfo.style.display = 'flex';
+
+  btnCopy.disabled = false;
+  btnOpen.disabled = false;
+  btnCopy.textContent = '📋 프롬프트 복사';
+  btnCopy.className = 'btn-copy';
+}
+
+async function copyPrompt(){
+  if(!currentPrompt) return;
+  try{
+    await navigator.clipboard.writeText(currentPrompt);
+    const btn = document.getElementById('btnCopy');
+    btn.textContent = '✅ 복사됨!';
+    btn.className = 'btn-copy copied';
+    setTimeout(()=>{ btn.textContent='📋 프롬프트 복사'; btn.className='btn-copy'; }, 2000);
+  }catch(e){
+    // 폴백: textarea 선택
+    const ta = document.createElement('textarea');
+    ta.value = currentPrompt;
+    ta.style.position='fixed';ta.style.opacity='0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    toast('✅ 복사됨!', 'ok');
   }
-  sendBtn.disabled = false;
-  document.getElementById('chatMsgs').scrollTop = 9999;
+}
+
+function openClaude(){
+  if(!currentPrompt) return;
+  // 복사도 같이
+  copyPrompt();
+  window.open('https://claude.ai/new', '_blank');
 }
 
 // ── INIT: 학생DB 먼저, 그 다음 records ──
@@ -1100,28 +1181,42 @@ init();
   <div class="chat-head">
     <div class="chat-head-info">
       <div class="chat-head-title">🤖 AI 상담 검색</div>
-      <div class="chat-head-sub">학생 이름 언급 시 해당 기록 전체 참조</div>
+      <div class="chat-head-sub">프롬프트 생성 → Claude.ai에서 답변</div>
     </div>
     <button class="chat-close" onclick="closeChat()">✕</button>
   </div>
-  <div class="chat-msgs" id="chatMsgs">
-    <div class="chat-msg ai">안녕하세요! 상담 기록에 대해 무엇이든 물어보세요.<br><br>
-• "이연재 최근 상담 요약해줘"<br>
-• "교재 변경 요청한 학생 누구야?"<br>
-• "이번 달 출결 문제 있는 학생?"<br>
-• "시험 관련 문의 많은 학생은?"</div>
-  </div>
   <div class="chat-hints" id="chatHints">
-    <span class="chat-hint" onclick="sendHint(this)">교재 관련 문의</span>
-    <span class="chat-hint" onclick="sendHint(this)">출결/시간표 문의</span>
-    <span class="chat-hint" onclick="sendHint(this)">시험 준비 학생</span>
-    <span class="chat-hint" onclick="sendHint(this)">반 이동 요청</span>
-    <span class="chat-hint" onclick="sendHint(this)">최근 상담 많은 학생</span>
+    <span class="chat-hint" onclick="setHint(this)">교재 관련 문의한 학생</span>
+    <span class="chat-hint" onclick="setHint(this)">출결/시간표 문의</span>
+    <span class="chat-hint" onclick="setHint(this)">시험 준비 중인 학생</span>
+    <span class="chat-hint" onclick="setHint(this)">반 이동 요청 학생</span>
+    <span class="chat-hint" onclick="setHint(this)">최근 상담 많은 학생</span>
   </div>
-  <div class="chat-foot">
-    <textarea class="chat-input" id="chatInput" placeholder="질문 입력..." rows="1"
-      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat();}"></textarea>
-    <button class="chat-send" id="chatSendBtn" onclick="sendChat()">➤</button>
+  <div class="chat-msgs" id="chatMsgs" style="flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:10px;">
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:13px 15px;font-size:13px;color:#1e3a8a;line-height:1.75;">
+      <strong>사용 방법</strong><br>
+      ① 아래에 질문 입력<br>
+      ② <strong>프롬프트 복사</strong> 클릭<br>
+      ③ <strong>Claude.ai 열기</strong> 클릭<br>
+      ④ 새 대화에 붙여넣기 (Ctrl+V)<br><br>
+      <span style="font-size:11.5px;color:#3b82f6;">학생 이름 언급 시 해당 기록 전체 포함<br>이름 없으면 전체 요약본 포함</span>
+    </div>
+  </div>
+  <div class="mode-info" id="modeInfo" style="display:none;">
+    <div class="mode-dot" id="modeDot"></div>
+    <span id="modeText"></span>
+  </div>
+  <div style="padding:10px 14px 6px;">
+    <div class="prompt-preview" id="promptPreview" style="display:none;"></div>
+  </div>
+  <div class="chat-foot" style="flex-direction:column;gap:8px;">
+    <textarea class="chat-input" id="chatInput" placeholder="질문 입력... (예: 이연재 최근 상담 요약해줘)"
+      style="width:100%;height:64px;resize:none;"
+      oninput="onQueryInput(this.value)"></textarea>
+    <div class="chat-actions">
+      <button class="btn-copy" id="btnCopy" onclick="copyPrompt()" disabled>📋 프롬프트 복사</button>
+      <button class="btn-open" id="btnOpen" onclick="openClaude()" disabled>↗ Claude.ai 열기</button>
+    </div>
   </div>
 </div>
 </body>
