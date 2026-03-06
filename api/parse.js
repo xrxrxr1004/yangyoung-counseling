@@ -1,146 +1,94 @@
-function buildMultipart(fields, fileField, fileBuffer, fileName, mimeType) {
-  const boundary = '----Boundary' + Math.random().toString(36).slice(2);
-  const CRLF = '\r\n';
-  const parts = [];
-
-  for (const [name, value] of Object.entries(fields)) {
-    parts.push(
-      `--${boundary}${CRLF}` +
-      `Content-Disposition: form-data; name="${name}"${CRLF}${CRLF}` +
-      `${value}${CRLF}`
-    );
-  }
-
-  const fileHeader =
-    `--${boundary}${CRLF}` +
-    `Content-Disposition: form-data; name="${fileField}"; filename="${fileName}"${CRLF}` +
-    `Content-Type: ${mimeType}${CRLF}${CRLF}`;
-
-  const footer = `${CRLF}--${boundary}--${CRLF}`;
-
-  const headerBuf = Buffer.from(fileHeader, 'utf-8');
-  const footerBuf = Buffer.from(footer, 'utf-8');
-  const textBuf = Buffer.from(parts.join(''), 'utf-8');
-
-  const body = Buffer.concat([textBuf, headerBuf, fileBuffer, footerBuf]);
-  return { body, contentType: `multipart/form-data; boundary=${boundary}` };
-}
-
-async function uploadToCloudinary(imageBase64, mediaType) {
-  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-  if (!cloudName) throw new Error('CLOUDINARY_CLOUD_NAME 없음');
-
-  const buffer = Buffer.from(imageBase64, 'base64');
-  const ext = (mediaType || 'image/png').split('/')[1] || 'png';
-
-  const { body, contentType } = buildMultipart(
-    { upload_preset: 'yangyoung' },
-    'file',
-    buffer,
-    `upload.${ext}`,
-    mediaType || 'image/png'
-  );
-
-  const r = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
-    method: 'POST',
-    headers: { 'Content-Type': contentType },
-    body
-  });
-
-  const data = await r.json();
-  if (!r.ok || data.error) throw new Error(`Cloudinary 오류: ${JSON.stringify(data.error)}`);
-  return data.secure_url;
-}
-
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { imageBase64, mediaType } = req.body;
-  if (!imageBase64) return res.status(400).json({ error: 'imageBase64 필요' });
+  const { imageUrl, studentName, date } = req.body;
+  if (!imageUrl) return res.status(400).json({ error: 'imageUrl required' });
 
-  const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-  if (!ANTHROPIC_API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY 없음' });
+  // Cloudinary에 이미 업로드된 URL에서 base64로 가져오거나, URL을 그대로 Claude에 전달
+  // Claude vision: URL 직접 전달 방식 사용
+  const prompt = `이 이미지는 학원 선생님과 학생(${studentName || '학생'}) 사이의 카카오톡 대화 스크린샷입니다.
+날짜: ${date || '날짜 미상'}
 
-  const today = new Date().toISOString().slice(0, 10);
+이미지에서 실제 학습 상담 내용(질문, 답변, 수업 관련 내용)만 추출하세요.
+단순 인사, 공지, "네", "감사합니다" 같은 의미 없는 메시지는 제외하세요.
+실제 상담 내용이 없으면 null을 반환하세요.
 
-  const prompt = `이 이미지는 카카오톡 학생 상담 대화 스크린샷입니다.
-아래 JSON 형식으로 정보를 추출하세요. JSON만 출력하고 다른 텍스트는 절대 포함하지 마세요.
-
+반드시 아래 JSON 형식으로만 응답하세요 (마크다운 코드블록 없이):
 {
-  "date": "YYYY-MM-DD",
-  "student": "학생 이름",
-  "school": "학교명",
-  "grade": "학년",
+  "student": "${studentName || '학생'}",
+  "date": "${date || ''}",
   "qna": [
-    { "q": "학생 발화", "a": "선생님 답변" }
+    {"q": "학생 질문 또는 학생 관련 내용", "a": "선생님 답변 또는 조치"}
   ],
-  "tags": ["태그"]
+  "tags": ["태그1", "태그2"],
+  "summary": "한 줄 요약"
 }
 
-규칙:
-- date: 카카오톡 대화 날짜. 형식은 반드시 YYYY-MM-DD. 이미지에서 찾기 어려우면 오늘(${today}) 사용. 절대 시각(예: 8:30, 오후 5시)을 날짜로 혼동하지 말 것.
-- student: 채팅방 상대방 한국어 이름 그대로. 절대 번역하지 말 것.
-- school: 학교명 한국어 그대로. 없으면 빈 문자열. 절대 영어로 번역하지 말 것.
-- grade: 학년. 없으면 빈 문자열.
-- qna: 카카오톡에서 오른쪽 노란색/초록색 말풍선 = 선생님(나)가 보낸 메시지 = a. 왼쪽 흰색/회색 말풍선 = 학생이 보낸 메시지 = q. 절대 반대로 혼동하지 말 것. 여러 개면 배열로.
-- tags: 교재확인/시간표/수업조율/시험범위/수행평가/자료요청/수업질문/기타 중 해당하는 것만 선택.`;
+태그는 다음 중에서만 선택: 시간표, 수업조율, 교재확인, 시험범위, 수행평가, 자료요청, 수업질문, 기타, 출결관련, 숙제확인, 시험결과, 일정조율, 학습상담, 교재안내, 시험준비, 상담기록
+
+실제 상담 내용이 없으면: null`;
 
   try {
-    // 1. Cloudinary 업로드
-    let imgUrl = null;
-    let cloudinaryError = null;
-    try {
-      imgUrl = await uploadToCloudinary(imageBase64, mediaType || 'image/png');
-    } catch (e) {
-      cloudinaryError = e.message;
-      console.error('Cloudinary 실패:', e.message);
-    }
-
-    // 2. Claude AI 분석
-    const aiResponse = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01'
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
         model: 'claude-3-5-haiku-20241022',
-        max_tokens: 1024,
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'image', source: { type: 'base64', media_type: mediaType || 'image/png', data: imageBase64 } },
-            { type: 'text', text: prompt }
-          ]
-        }]
-      })
+        max_tokens: 1000,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'image',
+                source: {
+                  type: 'url',
+                  url: imageUrl,
+                },
+              },
+              {
+                type: 'text',
+                text: prompt,
+              },
+            ],
+          },
+        ],
+      }),
     });
 
-    const aiRes = await aiResponse.json();
-    if (!aiResponse.ok) return res.status(500).json({ error: aiRes.error?.message || 'Claude API 오류' });
+    if (!response.ok) {
+      const err = await response.text();
+      return res.status(500).json({ error: 'Anthropic API error: ' + response.status, detail: err });
+    }
 
-    const text = aiRes.content?.[0]?.text || '';
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return res.status(500).json({ error: 'JSON 추출 실패', raw: text });
+    const aiResult = await response.json();
+    const raw = aiResult.content?.[0]?.text?.trim();
+
+    if (!raw || raw === 'null') {
+      return res.status(200).json({ data: null });
+    }
 
     let parsed;
-    try { parsed = JSON.parse(jsonMatch[0]); }
-    catch { return res.status(500).json({ error: 'JSON 파싱 실패', raw: text }); }
+    try {
+      const clean = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
+      parsed = JSON.parse(clean);
+    } catch (e) {
+      return res.status(200).json({ data: null });
+    }
 
-    // 배열로 왔을 경우 첫 번째 항목만 사용
-    if (Array.isArray(parsed)) parsed = parsed[0];
-    if (!parsed) return res.status(500).json({ error: '분석 결과 없음' });
+    if (!parsed || !parsed.qna || parsed.qna.length === 0) {
+      return res.status(200).json({ data: null });
+    }
 
-    parsed.id = 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
-    parsed.imgs = imgUrl ? [imgUrl] : [];
+    if (imageUrl) {
+      parsed.imgs = [imageUrl];
+    }
 
-    return res.status(200).json({ success: true, data: parsed, cloudinaryUrl: imgUrl, cloudinaryError });
-
+    return res.status(200).json({ data: parsed });
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }
