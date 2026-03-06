@@ -459,7 +459,7 @@ async function fetchDailySummary(date, recs){
     if(!res.ok){
       let errDetail='';
       try{ const ej=await res.json(); errDetail=ej.detail||ej.error||''; console.error('summarize HTTP',res.status,ej); }
-      catch(){ const et=await res.text(); errDetail=et; console.error('summarize HTTP',res.status,et); }
+      catch(_){ const et=await res.text(); errDetail=et; console.error('summarize HTTP',res.status,et); }
       dailySummaryCache[date]={loading:false, text:'(요약 실패: '+res.status+(errDetail?' — '+errDetail.slice(0,120):'')+')' };
     } else {
       const data=await res.json();
