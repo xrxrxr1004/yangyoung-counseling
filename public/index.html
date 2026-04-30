@@ -211,14 +211,20 @@ body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:#f0
   <div class="sync-indicator"><div class="sync-dot" id="syncDot"></div><span id="syncText">연결됨</span></div>
   <div class="stat" id="statEl" style="margin-left:8px"></div>
   <button class="btn btn-chat" onclick="openChat()">🤖 AI 검색</button>
+  <button class="btn btn-primary" onclick="openPaste()" title="카톡 텍스트 한 건 빠르게 추가 (무료, AI 안 씀)">⚡ 빠른 붙여넣기</button>
   <button class="btn btn-ghost" onclick="openStudentMgr()">👥 학생 관리</button>
   <button class="btn btn-ghost" onclick="openManual(null)">✏️ 직접 입력</button>
+  <button class="btn btn-ghost" onclick="doLogout()" title="로그아웃" style="margin-left:4px;">🔒</button>
   <input type="file" id="fileIn" accept="image/*,.csv" multiple style="display:none;" onchange="handleDrop(this.files)">
 </div>
 <div class="main">
   <div class="sidebar">
     <div class="sb-top">
       <input class="sb-search" id="searchIn" placeholder="이름·학교·내용 검색..." oninput="renderList()">
+      <div style="display:flex;gap:4px;margin-top:8px;background:#f0f2f7;border-radius:8px;padding:3px;">
+        <button id="vmRecords" onclick="setViewMode('records')" style="flex:1;border:none;background:#fff;color:#374151;border-radius:6px;padding:6px 0;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 1px 2px rgba(0,0,0,.06);">📅 기록순</button>
+        <button id="vmStudents" onclick="setViewMode('students')" style="flex:1;border:none;background:transparent;color:#9ca3af;border-radius:6px;padding:6px 0;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;">👤 학생순</button>
+      </div>
     </div>
     <div id="selBar">
       <span id="selCount">0건 선택됨</span>
@@ -257,6 +263,46 @@ body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:#f0
     <div class="modal-foot">
       <button class="btn-cancel" onclick="closeModal()">취소</button>
       <button class="btn-save" id="saveBtn">저장</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="pasteBg" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:100;align-items:center;justify-content:center;backdrop-filter:blur(3px);">
+  <div style="background:#fff;border-radius:16px;width:680px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+    <div class="modal-head">
+      <div class="modal-title">⚡ 빠른 붙여넣기 <span style="background:#dcfce7;color:#166534;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700;margin-left:6px;">무료 · AI 안 씀</span></div>
+      <button class="modal-close" onclick="closePaste()">✕</button>
+    </div>
+    <div style="padding:16px 22px;">
+      <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 13px;font-size:11.5px;color:#854d0e;margin-bottom:14px;line-height:1.7;">
+        💡 카카오톡 PC앱 → 채팅방 → 우상단 <strong>≡</strong> → <strong>대화 내용 내보내기</strong> → 텍스트 파일 → 메모장으로 열어서 복사 → 여기에 <strong>Ctrl/Cmd+V</strong>
+      </div>
+      <textarea id="pasteText" placeholder="카카오톡 대화 내용을 여기에 붙여넣기 (Cmd+V)"
+        style="width:100%;height:180px;border:1.5px solid #e4e8f0;border-radius:10px;padding:11px 13px;font-size:12.5px;font-family:'Menlo','Consolas',monospace;outline:none;resize:vertical;line-height:1.55;"
+        oninput="onPasteInput()"></textarea>
+      <div id="pasteHint" style="margin-top:6px;font-size:11.5px;color:#9ca3af;">붙여넣으면 자동으로 분석됩니다.</div>
+
+      <div id="pastePreview" style="display:none;margin-top:16px;border:1.5px solid #d1fae5;background:#f0fdf4;border-radius:12px;padding:14px 16px;">
+        <div style="font-size:11px;font-weight:700;color:#166534;letter-spacing:.5px;margin-bottom:10px;">✓ 분석 결과 (확인 후 저장)</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+          <div>
+            <div style="font-size:11px;font-weight:600;color:#374151;margin-bottom:4px;">학생</div>
+            <input id="ppStudent" class="f-input" style="width:100%;border:1.5px solid #e4e8f0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;font-family:inherit;">
+          </div>
+          <div>
+            <div style="font-size:11px;font-weight:600;color:#374151;margin-bottom:4px;">날짜</div>
+            <input id="ppDate" type="date" class="f-input" style="width:100%;border:1.5px solid #e4e8f0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;font-family:inherit;">
+          </div>
+        </div>
+        <div style="font-size:11px;font-weight:600;color:#374151;margin-bottom:4px;">태그</div>
+        <div id="ppTags" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px;"></div>
+        <div style="font-size:11px;font-weight:600;color:#374151;margin-bottom:4px;">대화 (<span id="ppQnaCount">0</span>건)</div>
+        <div id="ppQna" style="background:#fff;border:1px solid #e4e8f0;border-radius:8px;padding:10px;max-height:240px;overflow-y:auto;"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-cancel" onclick="closePaste()">취소</button>
+      <button class="btn-save" id="ppSaveBtn" onclick="savePasted()" disabled>저장</button>
     </div>
   </div>
 </div>
@@ -323,8 +369,25 @@ body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:#f0
 <script>
 const COLORS=["#1d4ed8","#7c3aed","#dc2626","#ea580c","#16a34a","#0891b2","#db2777","#65a30d","#b45309","#475569","#be185d","#0369a1"];
 const TAGS=["시간표","수업조율","교재확인","시험범위","수행평가","자료요청","수업질문","기타","출결관련","숙제확인","시험결과","일정조율","학습상담","교재안내","시험준비","상담기록"];
+// 상위 카테고리 묶음
+const TAG_GROUPS={
+  '행정': ['시간표','수업조율','출결관련','일정조율'],
+  '학습': ['수업질문','자료요청','숙제확인','학습상담','시험결과','시험준비'],
+  '정보공유': ['교재확인','교재안내','시험범위','수행평가','상담기록']
+};
+const GROUP_COLORS={'행정':'#0891b2','학습':'#7c3aed','정보공유':'#16a34a'};
+function tagsInGroup(g){ return TAG_GROUPS[g]||[]; }
+function recordMatchesFilter(r){
+  if(!filter) return true;
+  if(filter.startsWith('g:')){
+    const g=filter.slice(2);
+    const allow=tagsInGroup(g);
+    return (r.tags||[]).some(t=>allow.includes(t));
+  }
+  return (r.tags||[]).includes(filter);
+}
 
-let records=[],activeId=null,filter=null,pendingDel=null,editingId=null,selectedIds=new Set();
+let records=[],activeId=null,activeStudent=null,viewMode='records',filter=null,pendingDel=null,editingId=null,selectedIds=new Set();
 let calYear,calMonth,dateFilter=null;
 let students=[],stdTab=1,csvPreview=[];
 let modalTags=[],currentImgB64=null,currentParsed=null;
@@ -338,9 +401,14 @@ async function api(path,method="GET",body=null){
   const opts={method,headers:{"Content-Type":"application/json"}};
   if(body)opts.body=JSON.stringify(body);
   const r=await fetch("/api/"+path,{...opts,cache:"no-store"});
+  if(r.status===401){ location.href='/login.html'; throw new Error('unauthorized'); }
   const data=await r.json();
   if(!r.ok)throw new Error(data.error||"API error");
   return data;
+}
+async function doLogout(){
+  try{ await fetch('/api/auth',{method:'DELETE'}); }catch(_){}
+  location.href='/login.html';
 }
 
 // ────────────────────────────────────────────
@@ -456,6 +524,7 @@ async function fetchDailySummary(date, recs){
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({daily:true, content:trimmedContent, count:recs.length})
     });
+    if(res.status===401){ location.href='/login.html'; return; }
     if(!res.ok){
       let errDetail='';
       try{ const ej=await res.json(); errDetail=ej.detail||ej.error||''; console.error('summarize HTTP',res.status,ej); }
@@ -569,12 +638,28 @@ function renderHome(){
 
 // ── FILTERS ──
 function renderFilters(){
-  const allTags=[...new Set(records.flatMap(r=>r.tags||[]))];
+  // 1) 상위 그룹 칩 (행정 / 학습 / 정보공유)
   let h=`<button class="fc ${!filter?"on":""}" onclick="setFilter(null)">전체</button>`;
-  allTags.forEach(t=>{
+  Object.keys(TAG_GROUPS).forEach(g=>{
+    const allow=tagsInGroup(g);
+    const cnt=records.filter(r=>(r.tags||[]).some(t=>allow.includes(t))).length;
+    if(!cnt) return;
+    const fkey='g:'+g;
+    const on=filter===fkey;
+    const color=GROUP_COLORS[g];
+    h+=`<button class="fc ${on?"on":""}" onclick="setFilter('${fkey}')" style="${on?`background:${color};border-color:${color};color:#fff;`:`color:${color};border-color:${color}66;`}font-weight:700;">${g} ${cnt}</button>`;
+  });
+  // 2) 세부 태그 칩 (선택된 그룹의 태그만, 또는 전체)
+  let visibleTags;
+  if(filter && filter.startsWith('g:')){
+    visibleTags=tagsInGroup(filter.slice(2));
+  } else {
+    visibleTags=[...new Set(records.flatMap(r=>r.tags||[]))];
+  }
+  visibleTags.forEach(t=>{
     const cnt=records.filter(r=>(r.tags||[]).includes(t)).length;
-    if(!cnt)return;
-    h+=`<button class="fc ${filter===t?"on":""}" onclick="setFilter('${t}')">${t} ${cnt}</button>`;
+    if(!cnt) return;
+    h+=`<button class="fc ${filter===t?"on":""}" onclick="setFilter('${t}')" style="font-size:10.5px;">${t} ${cnt}</button>`;
   });
   document.getElementById("filterRow").innerHTML=h;
   document.getElementById("statEl").innerHTML=`총 <strong>${records.length}</strong>건`;
@@ -681,10 +766,146 @@ async function deleteSelected(){
   renderFilters();renderList();toast(ok+"건 삭제됐습니다.");
 }
 
+function setViewMode(m){
+  viewMode=m;
+  // 토글 시각 갱신
+  const a=document.getElementById('vmRecords'), b=document.getElementById('vmStudents');
+  if(m==='records'){
+    a.style.background='#fff'; a.style.color='#374151'; a.style.boxShadow='0 1px 2px rgba(0,0,0,.06)';
+    b.style.background='transparent'; b.style.color='#9ca3af'; b.style.boxShadow='none';
+  } else {
+    b.style.background='#fff'; b.style.color='#374151'; b.style.boxShadow='0 1px 2px rgba(0,0,0,.06)';
+    a.style.background='transparent'; a.style.color='#9ca3af'; a.style.boxShadow='none';
+  }
+  activeId=null;
+  renderList();
+  if(m==='students'){
+    if(activeStudent) renderStudentDetail(activeStudent);
+    else renderHome();
+  } else {
+    renderHome();
+  }
+}
+
+function renderStudentList(){
+  const q=document.getElementById("searchIn").value.toLowerCase();
+  // 학생별로 records 그룹핑 (filter 적용)
+  const byStudent={};
+  records.filter(r=>recordMatchesFilter(r)).forEach(r=>{
+    if(!r.student) return;
+    if(!byStudent[r.student]) byStudent[r.student]={recs:[],latestDate:''};
+    byStudent[r.student].recs.push(r);
+    if(r.date>byStudent[r.student].latestDate) byStudent[r.student].latestDate=r.date;
+  });
+  // 검색 적용
+  const items=Object.entries(byStudent).filter(([name,d])=>{
+    if(!q) return true;
+    const sample=d.recs[0]||{};
+    return name.includes(q)||(sample.school||'').includes(q)||d.recs.some(r=>(r.qna||[]).some(qa=>(qa.q+qa.a).toLowerCase().includes(q)));
+  }).sort((a,b)=>b[1].latestDate.localeCompare(a[1].latestDate));
+
+  const list=document.getElementById("sbList");
+  if(!items.length){ list.innerHTML='<div style="padding:20px;text-align:center;color:#9ca3af;font-size:13px;">학생이 없습니다</div>'; return; }
+
+  let h='';
+  items.forEach(([name,d])=>{
+    const sample=d.recs[0]||{};
+    const sc=[sample.school,sample.grade].filter(Boolean).join(' ');
+    const isActive=name===activeStudent;
+    h+=`<div class="sb-item ${isActive?'active':''}" data-student="${name}" onclick="selectStudent('${escapeHtml(name)}')">
+      <div class="av" style="background:${avColor(name)}">${name[0]}</div>
+      <div style="min-width:0;flex:1;">
+        <div class="sb-nm">${name} <span style="color:#9ca3af;font-size:10.5px;font-weight:500;">${d.recs.length}건</span></div>
+        ${sc?`<div class="sb-sc">${sc}</div>`:'<div class="sb-sc" style="color:#ef4444;font-size:10px;">학교 미확인</div>'}
+        <div class="sb-sc" style="color:#3b82f6;font-size:10px;">최근 ${fmtDate(d.latestDate)}</div>
+      </div>
+    </div>`;
+  });
+  list.innerHTML=h;
+}
+
+function selectStudent(name){
+  activeStudent=name; activeId=null;
+  renderStudentList();
+  renderStudentDetail(name);
+}
+
+function renderStudentDetail(name){
+  const recs=records.filter(r=>r.student===name).sort((a,b)=>b.date.localeCompare(a.date));
+  if(!recs.length){
+    document.getElementById('detail').innerHTML=`<div class="empty"><p>${escapeHtml(name)} 학생의 기록이 없습니다.</p></div>`;
+    return;
+  }
+  const sample=recs[0];
+  const sc=[sample.school,sample.grade].filter(Boolean).join(' ');
+
+  // 그룹별 분류
+  const byGroup={'행정':[],'학습':[],'정보공유':[],'기타':[]};
+  recs.forEach(r=>{
+    const tags=r.tags||[];
+    let assigned=false;
+    Object.keys(TAG_GROUPS).forEach(g=>{
+      if(tags.some(t=>tagsInGroup(g).includes(t))){
+        if(!byGroup[g].includes(r)) byGroup[g].push(r);
+        assigned=true;
+      }
+    });
+    if(!assigned) byGroup['기타'].push(r);
+  });
+
+  const tagFreq={};
+  recs.forEach(r=>(r.tags||[]).forEach(t=>{ tagFreq[t]=(tagFreq[t]||0)+1; }));
+  const topTags=Object.entries(tagFreq).sort((a,b)=>b[1]-a[1]).slice(0,5)
+    .map(([t,c])=>`<span style="background:#f1f5f9;color:#475569;border-radius:12px;padding:2px 8px;font-size:11px;">${t} ${c}</span>`).join(' ');
+
+  function recRow(r){
+    const tags=(r.tags||[]).slice(0,3).map(t=>`<span class="sb-t">${t}</span>`).join("");
+    const firstQ=(r.qna||[]).find(qa=>qa.q)?.q||'';
+    const preview=firstQ.replace(/\n/g,' ').slice(0,60);
+    return `<div onclick="viewMode='students';select('${r.id}')" style="padding:9px 12px;border-bottom:1px solid #f1f5f9;cursor:pointer;display:flex;gap:10px;align-items:flex-start;">
+      <div style="font-size:11px;color:#3b82f6;font-weight:700;min-width:62px;">${fmtDate(r.date)}</div>
+      <div style="flex:1;min-width:0;">
+        ${preview?`<div style="font-size:12px;color:#374151;line-height:1.5;">${escapeHtml(preview)}${firstQ.length>60?'…':''}</div>`:''}
+        ${tags?`<div style="display:flex;gap:3px;margin-top:3px;flex-wrap:wrap;">${tags}</div>`:''}
+      </div>
+    </div>`;
+  }
+
+  let h=`<div style="padding:0 4px;">
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:8px;">
+      <div class="d-av" style="background:${avColor(name)}">${name[0]}</div>
+      <div style="flex:1;">
+        <div class="d-name">${escapeHtml(name)}</div>
+        <div class="d-meta">${sc||'<span style="color:#ef4444;">학교 미확인</span>'} · 총 <strong>${recs.length}</strong>건 상담</div>
+      </div>
+      <button class="btn btn-ghost" onclick="setViewMode('records')" style="font-size:11.5px;">← 기록순</button>
+    </div>
+    ${topTags?`<div style="margin:10px 0 18px;display:flex;gap:5px;flex-wrap:wrap;">${topTags}</div>`:''}
+  </div>`;
+
+  Object.entries(byGroup).forEach(([g,grecs])=>{
+    if(!grecs.length) return;
+    const color=GROUP_COLORS[g]||'#6b7280';
+    h+=`<div style="margin-bottom:18px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:0 4px;">
+        <span style="width:8px;height:8px;border-radius:50%;background:${color};"></span>
+        <span style="font-size:12px;font-weight:700;color:${color};letter-spacing:.3px;">${g}</span>
+        <span style="font-size:11px;color:#9ca3af;">${grecs.length}건</span>
+      </div>
+      <div style="background:#fff;border:1px solid #e4e8f0;border-radius:12px;overflow:hidden;">
+        ${grecs.sort((a,b)=>b.date.localeCompare(a.date)).map(recRow).join('')}
+      </div>
+    </div>`;
+  });
+
+  document.getElementById('detail').innerHTML=h;
+}
+
 function renderList(){
+  if(viewMode==='students'){ renderStudentList(); return; }
   const q=document.getElementById("searchIn").value.toLowerCase();
   const filtered=records.filter(r=>{
-    const mf=!filter||(r.tags||[]).includes(filter);
+    const mf=recordMatchesFilter(r);
     const ms=!q||r.student.includes(q)||(r.school||"").includes(q)||(r.qna||[]).some(qa=>(qa.q+qa.a).toLowerCase().includes(q));
     const md=!dateFilter||r.date===dateFilter;
     return mf&&ms&&md;
@@ -1168,8 +1389,207 @@ function openClaude(){
   window.open('https://claude.ai/new', '_blank');
 }
 
-// ── INIT: 학생DB 먼저, 그 다음 records ──
+// ── 빠른 붙여넣기 (정규식 파서, AI 안 씀, 무료) ──
+let pastedParsed=null;
+
+function openPaste(){
+  document.getElementById('pasteBg').style.display='flex';
+  document.getElementById('pasteText').value='';
+  document.getElementById('pastePreview').style.display='none';
+  document.getElementById('ppSaveBtn').disabled=true;
+  document.getElementById('pasteHint').textContent='붙여넣으면 자동으로 분석됩니다.';
+  pastedParsed=null;
+  setTimeout(()=>document.getElementById('pasteText').focus(),50);
+}
+function closePaste(){
+  document.getElementById('pasteBg').style.display='none';
+  pastedParsed=null;
+}
+
+function onPasteInput(){
+  const text=document.getElementById('pasteText').value;
+  if(!text.trim()){
+    document.getElementById('pastePreview').style.display='none';
+    document.getElementById('ppSaveBtn').disabled=true;
+    return;
+  }
+  const parsed=parseKakaoText(text);
+  if(!parsed||!parsed.qna.length){
+    document.getElementById('pasteHint').innerHTML='<span style="color:#dc2626;">⚠️ 카카오톡 형식을 인식할 수 없어요. <strong>[이름] [오후 3:24] 메시지</strong> 줄이 필요합니다.</span>';
+    document.getElementById('pastePreview').style.display='none';
+    document.getElementById('ppSaveBtn').disabled=true;
+    return;
+  }
+  document.getElementById('pasteHint').textContent='✓ 인식 완료 — 아래 미리보기에서 확인하세요.';
+  pastedParsed=parsed;
+  showPastePreview(parsed);
+}
+
+function parseKakaoText(text){
+  if(!text||!text.trim()) return null;
+
+  // export 헤더에서 날짜·저장한 사람 추출
+  let exportDate=null;
+  const dm=text.match(/대화\s*내보낸\s*날짜\s*[:：]\s*(\d{4})[\.\-\/](\d{1,2})[\.\-\/](\d{1,2})/);
+  if(dm) exportDate=`${dm[1]}-${String(dm[2]).padStart(2,'0')}-${String(dm[3]).padStart(2,'0')}`;
+  let savedBy=null;
+  const sm=text.match(/저장한\s*사람\s*[:：]\s*(.+)/);
+  if(sm) savedBy=sm[1].trim();
+
+  // 메시지 라인: [이름] [오전/오후 H:MM] 본문
+  const msgRe=/^\s*\[([^\]]{1,40})\]\s*\[(오전|오후)\s*(\d{1,2}):(\d{2})\]\s*([\s\S]*)$/;
+  const lines=text.split('\n');
+  const messages=[];
+  let cur=null;
+  for(const line of lines){
+    const m=line.match(msgRe);
+    if(m){
+      if(cur) messages.push(cur);
+      cur={name:m[1].trim(), ampm:m[2], h:parseInt(m[3]), mm:m[4], content:m[5]};
+    } else if(cur && line.trim()){
+      // 멀티라인 메시지 이어붙이기
+      cur.content+='\n'+line;
+    }
+  }
+  if(cur) messages.push(cur);
+  if(!messages.length) return null;
+
+  // 선생님 = "저장한 사람" 우선, 없으면 학생DB와 매칭 안 되는 이름 추정
+  let teacher=savedBy;
+  if(!teacher){
+    // 학생DB에 등록된 이름들과 비교 — 등록 안 된 쪽이 선생님일 가능성
+    const studentNames=new Set(students.map(s=>s.name));
+    const counts={};
+    messages.forEach(m=>{ counts[m.name]=(counts[m.name]||0)+1; });
+    const sorted=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+    // 등록되지 않은 이름 중 가장 많이 보낸 사람을 선생님으로
+    const teacherCand=sorted.find(([n])=>!studentNames.has(n));
+    teacher=teacherCand?teacherCand[0]:sorted[0][0];
+  }
+
+  // 학생 = teacher 외 가장 많이 보낸 사람
+  const otherCounts={};
+  messages.forEach(m=>{ if(m.name!==teacher) otherCounts[m.name]=(otherCounts[m.name]||0)+1; });
+  const studentName=Object.entries(otherCounts).sort((a,b)=>b[1]-a[1])[0]?.[0]||'';
+
+  // Q-A 쌍 묶기
+  const qna=[];
+  let pendingQ=null;
+  for(const m of messages){
+    if(m.name===teacher){
+      if(pendingQ!==null){
+        qna.push({q:pendingQ, a:m.content});
+        pendingQ=null;
+      } else {
+        if(qna.length){
+          // 직전 답변에 이어붙이기 (선생님 연속 메시지)
+          qna[qna.length-1].a += '\n' + m.content;
+        } else {
+          qna.push({q:'', a:m.content});
+        }
+      }
+    } else if(m.name===studentName){
+      if(pendingQ!==null) pendingQ += '\n' + m.content;
+      else pendingQ=m.content;
+    }
+    // 그 외 다른 학생 이름은 무시 (단체방 일부 메시지)
+  }
+  if(pendingQ!==null) qna.push({q:pendingQ, a:''});
+
+  // 자동 태그
+  const allText=qna.map(qa=>(qa.q||'')+' '+(qa.a||'')).join(' ');
+  const tags=autoTagsFromText(allText);
+
+  return {
+    student: studentName,
+    teacher: teacher,
+    date: exportDate || new Date().toISOString().slice(0,10),
+    qna,
+    tags,
+    summary: ''
+  };
+}
+
+function autoTagsFromText(t){
+  const tags=new Set();
+  if(/결석|지각|조퇴|못\s*가|빠질|빠집|결석합/.test(t)) tags.add('출결관련');
+  if(/시험\s*범위|모의고사|중간고사|기말고사|수능특강|수특|EBS/.test(t)) tags.add('시험범위');
+  if(/교재|교과서|부교재|보충교재|책\s*있/.test(t)) tags.add('교재확인');
+  if(/수행평가|수행/.test(t)) tags.add('수행평가');
+  if(/시간표|요일|보강|시간\s*변경|시간\s*조정|픽스|스케줄/.test(t)){ tags.add('시간표'); tags.add('수업조율'); }
+  if(/자료\s*요청|자료\s*보내|PDF|pdf|해설|답지|요약본/.test(t)) tags.add('자료요청');
+  if(/[?？]|뭐예요|어떻게|어떻해|왜\s|모르겠|해석|풀이|설명/.test(t)) tags.add('수업질문');
+  if(/숙제|HW|hw|과제\s/.test(t)) tags.add('숙제확인');
+  if(tags.size===0) tags.add('기타');
+  return [...tags];
+}
+
+function showPastePreview(p){
+  document.getElementById('pastePreview').style.display='block';
+  document.getElementById('ppStudent').value=p.student||'';
+  document.getElementById('ppDate').value=p.date||'';
+  document.getElementById('ppQnaCount').textContent=p.qna.length;
+  // 태그 칩 (클릭 토글)
+  const tagsEl=document.getElementById('ppTags');
+  tagsEl.innerHTML=TAGS.map(t=>{
+    const on=p.tags.includes(t);
+    return `<button type="button" onclick="togglePasteTag('${t}')" style="border:1.5px solid ${on?'#10b981':'#e4e8f0'};background:${on?'#10b981':'#fff'};color:${on?'#fff':'#6b7280'};border-radius:14px;padding:3px 10px;font-size:11px;cursor:pointer;font-weight:${on?'700':'500'};font-family:inherit;">${t}</button>`;
+  }).join('');
+  // 대화
+  const qnaEl=document.getElementById('ppQna');
+  qnaEl.innerHTML=p.qna.map((qa,i)=>`
+    <div style="padding:8px 10px;border-bottom:1px solid #f1f5f9;">
+      ${qa.q?`<div style="font-size:11.5px;color:#64748b;margin-bottom:3px;"><strong style="color:#475569;">학생:</strong> <span style="white-space:pre-line;">${escapeHtml(qa.q)}</span></div>`:''}
+      ${qa.a?`<div style="font-size:11.5px;color:#1e40af;"><strong>선생님:</strong> <span style="white-space:pre-line;">${escapeHtml(qa.a)}</span></div>`:''}
+    </div>
+  `).join('');
+  document.getElementById('ppSaveBtn').disabled=!p.student;
+}
+
+function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function togglePasteTag(tag){
+  if(!pastedParsed) return;
+  const i=pastedParsed.tags.indexOf(tag);
+  if(i>=0) pastedParsed.tags.splice(i,1);
+  else pastedParsed.tags.push(tag);
+  showPastePreview(pastedParsed);
+}
+
+async function savePasted(){
+  if(!pastedParsed) return;
+  const studentInput=document.getElementById('ppStudent').value.trim();
+  const dateInput=document.getElementById('ppDate').value;
+  if(!studentInput){ toast('학생 이름을 입력하세요','err'); return; }
+  if(!dateInput){ toast('날짜를 입력하세요','err'); return; }
+  const rec={
+    student: studentInput,
+    date: dateInput,
+    qna: pastedParsed.qna,
+    tags: pastedParsed.tags,
+    summary: pastedParsed.summary || '',
+    imgs: []
+  };
+  const btn=document.getElementById('ppSaveBtn');
+  btn.disabled=true; btn.textContent='저장 중...';
+  try{
+    await api('record','POST',rec);
+    toast('저장됐어요','ok');
+    closePaste();
+    await loadRecords();
+  } catch(e){
+    toast('저장 실패: '+e.message,'err');
+    btn.disabled=false; btn.textContent='저장';
+  }
+}
+
+// ── INIT: 인증 확인 → 학생DB → records ──
 async function init(){
+  // 인증 확인 (실패 시 로그인 페이지로)
+  try{
+    const r=await fetch('/api/auth',{method:'GET',cache:'no-store'});
+    if(!r.ok){ location.href='/login.html'; return; }
+  }catch(_){ location.href='/login.html'; return; }
   await loadStudents();
   await loadRecords();
 }

@@ -1,4 +1,7 @@
+import { requireAuth } from './_auth.js';
+
 export default async function handler(req, res) {
+  if (!requireAuth(req, res)) return;
   const keyExists = !!process.env.ANTHROPIC_API_KEY;
   const keyPrefix = process.env.ANTHROPIC_API_KEY?.slice(0, 8) || '(없음)';
   const kvUrl = !!process.env.KV_REST_API_URL;

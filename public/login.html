@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>로그인 · 양영학원 상담 관리</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:linear-gradient(135deg,#eff6ff 0%,#f0f2f7 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
+.box{background:#fff;border-radius:18px;box-shadow:0 24px 60px rgba(15,23,42,.12);padding:42px 38px 36px;width:100%;max-width:400px;}
+.logo{text-align:center;font-size:18px;font-weight:700;color:#111827;margin-bottom:8px;}
+.logo span{color:#2563eb;}
+.sub{text-align:center;font-size:12.5px;color:#6b7280;margin-bottom:28px;line-height:1.6;}
+.label{font-size:12px;font-weight:700;color:#374151;margin-bottom:7px;letter-spacing:.3px;}
+.input{width:100%;border:1.5px solid #e4e8f0;border-radius:10px;padding:12px 14px;font-size:14px;outline:none;font-family:inherit;background:#f8f9fc;transition:all .15s;}
+.input:focus{border-color:#2563eb;background:#fff;}
+.btn{width:100%;background:#2563eb;color:#fff;border:none;border-radius:10px;padding:13px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:18px;transition:background .15s;}
+.btn:hover{background:#1d4ed8;}
+.btn:disabled{background:#9ca3af;cursor:not-allowed;}
+.err{margin-top:14px;font-size:12.5px;color:#dc2626;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:9px 12px;display:none;}
+.err.show{display:block;}
+.note{margin-top:22px;text-align:center;font-size:11px;color:#9ca3af;line-height:1.7;}
+</style>
+</head>
+<body>
+<form class="box" id="loginForm" onsubmit="return doLogin(event)">
+  <div class="logo">📋 <span>양영학원</span> 상담 관리</div>
+  <div class="sub">계속하려면 비밀번호를 입력하세요</div>
+  <div class="label">비밀번호</div>
+  <input type="password" class="input" id="pw" autocomplete="current-password" autofocus required>
+  <button type="submit" class="btn" id="btn">로그인</button>
+  <div class="err" id="err"></div>
+  <div class="note">학원 내부 도구입니다.<br>비밀번호를 모르면 담당 강사에게 문의하세요.</div>
+</form>
+<script>
+async function doLogin(e){
+  e.preventDefault();
+  const pw=document.getElementById('pw').value;
+  const btn=document.getElementById('btn');
+  const err=document.getElementById('err');
+  err.classList.remove('show');
+  btn.disabled=true; btn.textContent='로그인 중...';
+  try{
+    const r=await fetch('/api/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})});
+    const d=await r.json();
+    if(!r.ok){
+      err.textContent=d.error||'로그인 실패';
+      err.classList.add('show');
+      btn.disabled=false; btn.textContent='로그인';
+      document.getElementById('pw').select();
+      return false;
+    }
+    location.href='/';
+  }catch(ex){
+    err.textContent='네트워크 오류: '+ex.message;
+    err.classList.add('show');
+    btn.disabled=false; btn.textContent='로그인';
+  }
+  return false;
+}
+// 이미 로그인되어 있으면 곧장 홈으로
+fetch('/api/auth',{method:'GET'}).then(r=>{if(r.ok)location.href='/';}).catch(()=>{});
+</script>
+</body>
+</html>

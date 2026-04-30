@@ -1,7 +1,10 @@
 // api/seed-bulk.js
 // GET /api/seed-bulk 호출 시 public/all_records.json을 읽어 Upstash에 저장
 
+import { requireAuth } from './_auth.js';
+
 export default async function handler(req, res) {
+  if (!requireAuth(req, res)) return;
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
   const KV_URL   = process.env.KV_REST_API_URL;
